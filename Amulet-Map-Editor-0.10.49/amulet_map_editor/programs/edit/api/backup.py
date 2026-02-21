@@ -58,19 +58,39 @@ def _repair_leveldb_current_if_needed(backup_path: str) -> bool:
     if not os.path.isdir(db_path):
         return False
 
+    entries = []
+    try:
+        entries = os.listdir(db_path)
+    except OSError:
+        return False
+
+    manifest_lookup = {
+        name.upper(): name for name in entries if name.upper().startswith("MANIFEST-")
+    }
+
+    def _resolve_manifest_name(name: str) -> str:
+        name = name.strip()
+        if not name:
+            return ""
+        if os.path.exists(os.path.join(db_path, name)):
+            return name
+        return manifest_lookup.get(name.upper(), "")
+
     current_path = os.path.join(db_path, "CURRENT")
     if os.path.isfile(current_path):
         try:
             with open(current_path, "r", encoding="utf-8", errors="ignore") as f:
                 current_value = f.read().strip()
-            if current_value and os.path.exists(os.path.join(db_path, current_value)):
+            resolved_manifest = _resolve_manifest_name(current_value)
+            if resolved_manifest:
+                if resolved_manifest != current_value:
+                    with open(current_path, "w", encoding="utf-8", newline="\n") as f:
+                        f.write(f"{resolved_manifest}\n")
                 return True
         except OSError:
             pass
 
-    manifests = sorted(
-        name for name in os.listdir(db_path) if name.startswith("MANIFEST-")
-    )
+    manifests = sorted(manifest_lookup.values())
     if not manifests:
         return False
 
@@ -84,7 +104,11 @@ def _repair_leveldb_current_if_needed(backup_path: str) -> bool:
     return os.path.exists(os.path.join(db_path, manifest_name))
 
 
-def _copy_file_with_retries(source_path: str, destination_path: str) -> Optional[str]:
+def _copy_file_with_retries(
+    source_path: str,
+    destination_path: str,
+    allow_content_only_fallback: bool = False,
+) -> Optional[str]:
     """
     Copy a file while tolerating transient sharing violations.
     Returns None on success, otherwise a human-readable skip reason.
@@ -104,6 +128,20 @@ def _copy_file_with_retries(source_path: str, destination_path: str) -> Optional
                 last_error = exc
             else:
                 raise
+
+        if allow_content_only_fallback:
+            try:
+                shutil.copyfile(source_path, destination_path)
+                return None
+            except FileNotFoundError:
+                return "Source file disappeared during backup."
+            except PermissionError as exc:
+                last_error = exc
+            except OSError as exc:
+                if getattr(exc, "winerror", None) in (5, 32, 33):
+                    last_error = exc
+                else:
+                    raise
 
         if attempt < len(_COPY_RETRY_DELAYS_SECONDS):
             time.sleep(_COPY_RETRY_DELAYS_SECONDS[attempt])
@@ -436,7 +474,11 @@ def iter_backup(
         rel = os.path.relpath(src, world_path)
         dest = os.path.join(backup_path, rel)
         os.makedirs(os.path.dirname(dest), exist_ok=True)
-        skip_reason = _copy_file_with_retries(src, dest)
+        skip_reason = _copy_file_with_retries(
+            src,
+            dest,
+            allow_content_only_fallback=_rel_path_key(rel) == "db/current",
+        )
         if skip_reason is not None:
             skipped.append((rel, skip_reason))
             yield idx / total, f"Backing up {base_name} ({idx}/{total})"

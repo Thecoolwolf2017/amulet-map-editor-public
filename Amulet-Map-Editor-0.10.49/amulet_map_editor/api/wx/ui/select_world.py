@@ -23,6 +23,24 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+def _make_tree_writable(path: str) -> None:
+    if platform != "win32":
+        return
+
+    def _set_mode(target: str, mode: int) -> None:
+        try:
+            os.chmod(target, mode)
+        except OSError:
+            pass
+
+    _set_mode(path, 0o777)
+    for root, dirs, files in os.walk(path):
+        for directory in dirs:
+            _set_mode(os.path.join(root, directory), 0o777)
+        for file_name in files:
+            _set_mode(os.path.join(root, file_name), 0o666)
+
+
 # Windows 	%APPDATA%\.minecraft
 # macOS 	~/Library/Application Support/minecraft
 # Linux 	~/.minecraft
@@ -403,7 +421,9 @@ class WorldSelectUI(wx.Panel):
         busy_msg = wx.BusyInfo(lang.get("select_world.extracting_world_wait"))
 
         try:
-            zipfile.ZipFile(mcworld_path).extractall(extract_dir)
+            with zipfile.ZipFile(mcworld_path) as archive:
+                archive.extractall(extract_dir)
+            _make_tree_writable(extract_dir)
         except Exception as e:
             del busy_msg
             dialog = TracebackDialog(

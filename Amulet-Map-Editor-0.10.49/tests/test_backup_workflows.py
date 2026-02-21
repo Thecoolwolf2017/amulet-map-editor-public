@@ -300,6 +300,89 @@ class BackupWorkflowTests(unittest.TestCase):
             os.path.exists(os.path.join(backup_path, ".amulet_backup_warnings.txt"))
         )
 
+    def test_backup_uses_copyfile_fallback_for_leveldb_current(self):
+        backup_module.set_backup_settings(
+            enabled=True,
+            backup_root=os.path.join(self._tmp.name, "backups"),
+            retention_count=5,
+        )
+
+        world_path = self._make_world(
+            "bedrock_world_copyfile",
+            "db/CURRENT",
+            "MANIFEST-000001\n",
+        )
+        with open(
+            os.path.join(world_path, "db/MANIFEST-000001"), "w", encoding="utf-8"
+        ) as f:
+            f.write("manifest-data")
+
+        current_path = os.path.join(world_path, "db/CURRENT")
+        original_copy2 = backup_module.shutil.copy2
+
+        def _copy2_with_permission_denied(src, dst, *args, **kwargs):
+            norm_src = os.path.normcase(os.path.normpath(src))
+            norm_current = os.path.normcase(os.path.normpath(current_path))
+            if norm_src == norm_current:
+                raise PermissionError(13, "Permission denied")
+            return original_copy2(src, dst, *args, **kwargs)
+
+        with mock.patch.object(
+            backup_module.shutil, "copy2", side_effect=_copy2_with_permission_denied
+        ):
+            backup_path = _exhaust(backup_module.iter_backup(world_path, "pre-save"))
+
+        self.assertTrue(backup_path)
+        copied_current = os.path.join(backup_path, "db/CURRENT")
+        self.assertTrue(os.path.exists(copied_current))
+        with open(copied_current, "r", encoding="utf-8") as f:
+            self.assertEqual(f.read(), "MANIFEST-000001\n")
+        self.assertFalse(
+            os.path.exists(os.path.join(backup_path, ".amulet_backup_warnings.txt"))
+        )
+
+    def test_backup_repairs_leveldb_current_with_lowercase_manifest_name(self):
+        backup_module.set_backup_settings(
+            enabled=True,
+            backup_root=os.path.join(self._tmp.name, "backups"),
+            retention_count=5,
+        )
+
+        world_path = self._make_world(
+            "bedrock_world_lower_manifest",
+            "db/CURRENT",
+            "manifest-000001\n",
+        )
+        manifest_name = "manifest-000001"
+        with open(
+            os.path.join(world_path, f"db/{manifest_name}"), "w", encoding="utf-8"
+        ) as f:
+            f.write("manifest-data")
+
+        current_path = os.path.join(world_path, "db/CURRENT")
+        original_copy2 = backup_module.shutil.copy2
+
+        def _copy2_with_locked_current(src, dst, *args, **kwargs):
+            norm_src = os.path.normcase(os.path.normpath(src))
+            norm_current = os.path.normcase(os.path.normpath(current_path))
+            if norm_src == norm_current:
+                raise PermissionError(13, "Permission denied")
+            return original_copy2(src, dst, *args, **kwargs)
+
+        with mock.patch.object(
+            backup_module.shutil, "copy2", side_effect=_copy2_with_locked_current
+        ):
+            backup_path = _exhaust(backup_module.iter_backup(world_path, "pre-save"))
+
+        self.assertTrue(backup_path)
+        repaired_current = os.path.join(backup_path, "db/CURRENT")
+        self.assertTrue(os.path.exists(repaired_current))
+        with open(repaired_current, "r", encoding="utf-8") as f:
+            self.assertEqual(f.read(), f"{manifest_name}\n")
+        self.assertFalse(
+            os.path.exists(os.path.join(backup_path, ".amulet_backup_warnings.txt"))
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
