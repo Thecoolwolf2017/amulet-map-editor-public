@@ -40,8 +40,8 @@ jobs:
         echo "BUILT_PATH=$built_path" >> $GITHUB_ENV
         python -m PyInstaller -y Amulet.spec
 
-    - name: Code sign executables (optional)
-      if: runner.os == 'Windows' && secrets.WINDOWS_SIGN_CERT_BASE64 != '' && secrets.WINDOWS_SIGN_CERT_PASSWORD != ''
+    - name: Code sign executables
+      if: runner.os == 'Windows'
       shell: pwsh
       env:
         WINDOWS_SIGN_CERT_BASE64: ${{ secrets.WINDOWS_SIGN_CERT_BASE64 }}
@@ -50,9 +50,32 @@ jobs:
       run: |
         $timestamp = if ($env:WINDOWS_SIGN_TIMESTAMP_URL) { $env:WINDOWS_SIGN_TIMESTAMP_URL } else { "http://timestamp.digicert.com" }
         $certPath = Join-Path $env:RUNNER_TEMP "code_signing.pfx"
-        [System.IO.File]::WriteAllBytes($certPath, [System.Convert]::FromBase64String($env:WINDOWS_SIGN_CERT_BASE64))
-        signtool sign /fd SHA256 /td SHA256 /tr $timestamp /f $certPath /p $env:WINDOWS_SIGN_CERT_PASSWORD dist/Amulet/amulet_app.exe
-        signtool sign /fd SHA256 /td SHA256 /tr $timestamp /f $certPath /p $env:WINDOWS_SIGN_CERT_PASSWORD dist/Amulet/amulet_app_debug.exe
+        $certPassword = $env:WINDOWS_SIGN_CERT_PASSWORD
+
+        if ($env:WINDOWS_SIGN_CERT_BASE64 -and $certPassword) {
+          Write-Host "Using repository signing certificate secrets."
+          [System.IO.File]::WriteAllBytes($certPath, [System.Convert]::FromBase64String($env:WINDOWS_SIGN_CERT_BASE64))
+        } else {
+          Write-Host "No signing secrets found; generating self-signed cert for this build."
+          $certPassword = [Guid]::NewGuid().ToString("N")
+          $secure = ConvertTo-SecureString -String $certPassword -AsPlainText -Force
+          $cert = New-SelfSignedCertificate `
+            -Type CodeSigningCert `
+            -Subject "CN=Amulet Self Signed" `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -HashAlgorithm SHA256 `
+            -NotAfter (Get-Date).AddYears(1) `
+            -KeyExportPolicy Exportable
+          Export-PfxCertificate -Cert $cert -FilePath $certPath -Password $secure | Out-Null
+        }
+
+        $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+          Sort-Object FullName -Descending |
+          Select-Object -First 1).FullName
+        if (-not $signtool) { throw "signtool.exe not found" }
+
+        & $signtool sign /fd SHA256 /td SHA256 /tr $timestamp /f $certPath /p $certPassword dist/Amulet/amulet_app.exe
+        & $signtool sign /fd SHA256 /td SHA256 /tr $timestamp /f $certPath /p $certPassword dist/Amulet/amulet_app_debug.exe
 
     - name: Package zip
       run: |
