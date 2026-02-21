@@ -1,5 +1,7 @@
 # Normalize text files and keep source/docs LF across platforms.
 * text=auto
+.gitattributes text eol=lf
+.gitignore text eol=lf
 *.py text eol=lf
 *.pyx text eol=lf
 *.pxd text eol=lf
