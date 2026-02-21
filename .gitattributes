@@ -1,0 +1,32 @@
+# Normalize text files and keep source/docs LF across platforms.
+* text=auto
+*.py text eol=lf
+*.pyx text eol=lf
+*.pxd text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.toml text eol=lf
+*.cfg text eol=lf
+*.ini text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Keep binary assets untouched.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.zip binary
+*.gz binary
+*.tar binary
+*.whl binary
+*.exe binary
+*.dll binary
+*.pyd binary
