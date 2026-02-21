@@ -1,32 +1,28 @@
-# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
-
 name: Build
 
 on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
   deploy:
-    runs-on: ${{ matrix.cfg.os }}
+    runs-on: windows-latest
     defaults:
       run:
         shell: bash
-
-    strategy:
-      fail-fast: false
-      matrix:
-        cfg:
-        - {os: windows-latest, python-version: '3.10', architecture: x64}
+        working-directory: Amulet-Map-Editor-0.10.49
 
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.cfg.python-version }} ${{ matrix.cfg.architecture }}
+
+    - name: Set up Python 3.10 x64
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ matrix.cfg.python-version }}
-        architecture: ${{ matrix.cfg.architecture }}
+        python-version: '3.10'
+        architecture: x64
 
     - name: Install dependencies
       run: |
@@ -36,13 +32,14 @@ jobs:
 
     - name: PyInstaller build
       run: |
-        built_path=Amulet-${{ github.event.release.tag_name }}-$RUNNER_OS-${{ matrix.cfg.architecture }}.zip
+        built_path=Amulet-${{ github.event.release.tag_name }}-$RUNNER_OS-x64.zip
         echo "BUILT_PATH=$built_path" >> $GITHUB_ENV
         python -m PyInstaller -y Amulet.spec
 
     - name: Code sign executables (optional)
       if: runner.os == 'Windows' && secrets.WINDOWS_SIGN_CERT_BASE64 != '' && secrets.WINDOWS_SIGN_CERT_PASSWORD != ''
       shell: pwsh
+      working-directory: Amulet-Map-Editor-0.10.49
       env:
         WINDOWS_SIGN_CERT_BASE64: ${{ secrets.WINDOWS_SIGN_CERT_BASE64 }}
         WINDOWS_SIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}
@@ -57,18 +54,16 @@ jobs:
     - name: Package zip
       run: |
         cd dist
-        if [ "$RUNNER_OS" == "Windows" ]; then
-          7z a $BUILT_PATH Amulet
-        elif [ "$RUNNER_OS" == "macOS" ]; then
-          zip -r $BUILT_PATH Amulet
-        else
-          echo "$RUNNER_OS not supported"
-          exit 1
-        fi
+        7z a $BUILT_PATH Amulet
         cd ..
 
-    - name: Upload Release Asset
+    - name: Upload release zip
+      uses: softprops/action-gh-release@v2
+      with:
+        files: ./Amulet-Map-Editor-0.10.49/dist/${{ env.BUILT_PATH }}
+
+    - name: Upload artifact copy
       uses: actions/upload-artifact@v4
       with:
-        name: ${{env.BUILT_PATH}}
-        path: ./dist/${{env.BUILT_PATH}}
+        name: ${{ env.BUILT_PATH }}
+        path: ./Amulet-Map-Editor-0.10.49/dist/${{ env.BUILT_PATH }}
