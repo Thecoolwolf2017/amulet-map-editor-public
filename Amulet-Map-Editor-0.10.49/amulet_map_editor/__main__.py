@@ -41,6 +41,47 @@ try:
     import glob
     import time
     import shutil
+
+    def _configure_windows_dll_search_paths() -> None:
+        if sys.platform != "win32":
+            return
+
+        candidate_dirs: list[str] = []
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            candidate_dirs.extend(
+                [
+                    meipass,
+                    os.path.join(meipass, "leveldb"),
+                    os.path.join(meipass, "wx"),
+                ]
+            )
+
+        if getattr(sys, "frozen", False):
+            exe_dir = os.path.dirname(sys.executable)
+            internal_dir = os.path.join(exe_dir, "_internal")
+            candidate_dirs.extend(
+                [
+                    internal_dir,
+                    os.path.join(internal_dir, "leveldb"),
+                    os.path.join(internal_dir, "wx"),
+                ]
+            )
+
+        seen_dirs = set()
+        for path in candidate_dirs:
+            if not path:
+                continue
+            norm_path = os.path.normcase(os.path.normpath(path))
+            if norm_path in seen_dirs or not os.path.isdir(path):
+                continue
+            seen_dirs.add(norm_path)
+            try:
+                os.add_dll_directory(path)
+            except (AttributeError, OSError):
+                pass
+
+    _configure_windows_dll_search_paths()
     # Import leveldb before wx to avoid a native crash when opening Bedrock worlds.
     import leveldb
     import wx
@@ -170,6 +211,7 @@ def main() -> NoReturn:
         log.debug("Importing amulet_nbt")
         import amulet_nbt
 
+        _configure_windows_dll_search_paths()
         log.debug("Importing leveldb")
         import leveldb
 

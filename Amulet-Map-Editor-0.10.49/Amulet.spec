@@ -49,10 +49,12 @@ hidden.extend(collect_submodules("OpenGL.GL.shaders"))
 
 extra_binaries = []
 if os.name == "nt":
-    # leveldb._leveldb depends on MSVCP140.dll; include it at the top level so
-    # Windows can resolve it when importing from _internal\leveldb.
-    for path in glob.glob(os.path.join(glob.escape(WX_PATH), "msvcp140*.dll")):
-        extra_binaries.append((path, "."))
+    # leveldb._leveldb depends on MSVC runtime DLLs. Include them in both
+    # _internal and _internal\leveldb so dependency resolution works reliably.
+    for pattern in ("msvcp140*.dll", "vcruntime140*.dll"):
+        for path in glob.glob(os.path.join(glob.escape(WX_PATH), pattern)):
+            extra_binaries.append((path, "."))
+            extra_binaries.append((path, "leveldb"))
 
 a = Analysis(
     [
