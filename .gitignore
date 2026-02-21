@@ -1,0 +1,7 @@
+Amulet-Map-Editor-0.10.49/.venv*/
+Amulet-Map-Editor-0.10.49/build/
+Amulet-Map-Editor-0.10.49/dist/
+Amulet-Map-Editor-0.10.49/*.egg-info/
+_internal/
+amulet_app.exe
+amulet_app_debug.exe

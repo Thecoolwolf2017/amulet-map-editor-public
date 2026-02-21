@@ -1,0 +1,69 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Build
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  deploy:
+    runs-on: ${{ matrix.cfg.os }}
+    defaults:
+      run:
+        shell: bash
+
+    strategy:
+      fail-fast: false
+      matrix:
+        cfg:
+        - {os: windows-latest, python-version: '3.10', architecture: x64}
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.cfg.python-version }} ${{ matrix.cfg.architecture }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.cfg.python-version }}
+        architecture: ${{ matrix.cfg.architecture }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install setuptools wheel twine pyinstaller~=6.18 build
+
+    - name: Setup
+      run: |
+        export BDISTWHEELFREEZELIBS=true
+        python -m build
+        python -m pip install dist/amulet_map_editor-*.whl --upgrade
+
+    - name: PyInstaller build
+      run: |
+        built_path=Amulet-v${{ github.event.release.tag_name }}-$RUNNER_OS-${{ matrix.cfg.architecture }}.zip
+        echo "BUILT_PATH=$built_path" >> $GITHUB_ENV
+        python -m PyInstaller -y Amulet.spec
+        cd dist
+        if [ "$RUNNER_OS" == "Windows" ]; then
+          7z a $built_path Amulet
+        elif [ "$RUNNER_OS" == "macOS" ]; then
+          zip -r $built_path Amulet
+        else
+          echo "$RUNNER_OS not supported"
+          exit 1
+        fi
+        cd ..
+
+    - name: Publish to PyPi
+      env:
+        TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+        TWINE_PASSWORD: ${{ secrets.AMULET_MAP_EDITOR_PYPI_PASSWORD }}
+      run: |
+        twine upload dist/amulet[_-]map[_-]editor* --skip-existing
+
+    - name: Upload Release Asset
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{env.BUILT_PATH}}
+        path: ./dist/${{env.BUILT_PATH}}

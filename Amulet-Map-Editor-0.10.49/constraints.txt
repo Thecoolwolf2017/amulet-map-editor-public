@@ -1,0 +1,17 @@
+# Pinned dependency versions for reproducible installs/builds.
+# Update this file intentionally when bumping dependencies.
+
+Pillow==12.1.1
+wxPython==4.2.5
+numpy==1.26.4
+PyOpenGL==3.1.10
+packaging==26.0
+amulet-core==1.9.35
+amulet-nbt==2.1.6
+pymctranslate==1.2.40
+minecraft-resource-pack==1.4.7
+platformdirs==3.11.0
+
+# Dev tools
+black==24.10.0
+pre-commit==3.8.0
