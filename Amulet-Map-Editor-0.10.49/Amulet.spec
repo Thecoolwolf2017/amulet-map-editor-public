@@ -20,6 +20,7 @@ import amulet_nbt
 import PyMCTranslate
 import minecraft_model_reader
 import amulet_map_editor
+import wx
 
 if TYPE_CHECKING:
     from PyInstaller.building.build_main import Analysis
@@ -35,6 +36,7 @@ AMULET_PATH = amulet.__path__[0]
 PYMCT_PATH = PyMCTranslate.__path__[0]
 MINECRAFT_MODEL_READER = minecraft_model_reader.__path__[0]
 AMULET_MAP_EDITOR = amulet_map_editor.__path__[0]
+WX_PATH = wx.__path__[0]
 
 
 hidden = []
@@ -45,13 +47,19 @@ hidden.extend(collect_submodules("OpenGL"))
 hidden.extend(collect_submodules("OpenGL.GL"))
 hidden.extend(collect_submodules("OpenGL.GL.shaders"))
 
+extra_binaries = []
+if os.name == "nt":
+    # leveldb._leveldb depends on MSVCP140.dll; include it at the top level so
+    # Windows can resolve it when importing from _internal\leveldb.
+    for path in glob.glob(os.path.join(glob.escape(WX_PATH), "msvcp140*.dll")):
+        extra_binaries.append((path, "."))
 
 a = Analysis(
     [
         os.path.join(AMULET_MAP_EDITOR, "__main__.py"),
         os.path.join(AMULET_MAP_EDITOR, "__main_debug__.py"),
     ],
-    binaries=[],
+    binaries=extra_binaries,
     datas=[],
     hiddenimports=hidden,
     hookspath=[
