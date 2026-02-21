@@ -37,35 +37,38 @@ def _preflight_world_open(path: str) -> tuple[bool, str]:
     Load/close the world in a subprocess first.
     This prevents native extension crashes from taking down the UI process.
     """
-    # Frozen builds are not guaranteed to support "-c" execution.
-    if getattr(sys, "frozen", False):
-        return True, ""
-
-    script = dedent("""
-        import sys
-        import traceback
-        import amulet
-
-        world = None
-        try:
-            world = amulet.load_level(sys.argv[1])
-        except BaseException:
-            traceback.print_exc()
-            raise
-        finally:
-            if world is not None:
-                close = getattr(world, "close", None)
-                if close is not None:
-                    close()
-        """)
-
     try:
-        completed = subprocess.run(
-            [sys.executable, "-c", script, path],
-            capture_output=True,
-            text=True,
-            timeout=25,
-        )
+        if getattr(sys, "frozen", False):
+            completed = subprocess.run(
+                [sys.executable, "--amulet-world-probe", path],
+                capture_output=True,
+                text=True,
+                timeout=25,
+            )
+        else:
+            script = dedent("""
+                import sys
+                import traceback
+                import amulet
+
+                world = None
+                try:
+                    world = amulet.load_level(sys.argv[1])
+                except BaseException:
+                    traceback.print_exc()
+                    raise
+                finally:
+                    if world is not None:
+                        close = getattr(world, "close", None)
+                        if close is not None:
+                            close()
+                """)
+            completed = subprocess.run(
+                [sys.executable, "-c", script, path],
+                capture_output=True,
+                text=True,
+                timeout=25,
+            )
     except subprocess.TimeoutExpired:
         return False, "Timed out while probing this world."
     except BaseException as exc:

@@ -178,8 +178,35 @@ def _preflight() -> None:
         pass
 
 
+def _run_world_probe(path: str) -> int:
+    import traceback
+    import amulet
+
+    world = None
+    try:
+        world = amulet.load_level(path)
+        return 0
+    except BaseException:
+        traceback.print_exc()
+        return 1
+    finally:
+        if world is not None:
+            close = getattr(world, "close", None)
+            if close is not None:
+                try:
+                    close()
+                except Exception:
+                    pass
+
+
 def main() -> NoReturn:
     try:
+        if "--amulet-world-probe" in sys.argv:
+            index = sys.argv.index("--amulet-world-probe")
+            if index + 1 >= len(sys.argv):
+                raise Exception("Missing world path for --amulet-world-probe")
+            sys.exit(_run_world_probe(sys.argv[index + 1]))
+
         # Initialise default paths.
         data_dir = platformdirs.user_data_dir("AmuletMapEditor", "AmuletTeam")
         os.environ.setdefault("DATA_DIR", data_dir)

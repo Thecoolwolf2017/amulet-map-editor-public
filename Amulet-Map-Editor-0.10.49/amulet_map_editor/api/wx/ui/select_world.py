@@ -41,6 +41,36 @@ def _make_tree_writable(path: str) -> None:
             _set_mode(os.path.join(root, file_name), 0o666)
 
 
+def _looks_like_world_root(path: str) -> bool:
+    if not os.path.isdir(path):
+        return False
+    checks = (
+        os.path.isdir(os.path.join(path, "db")),
+        os.path.isfile(os.path.join(path, "level.dat")),
+        os.path.isfile(os.path.join(path, "levelname.txt")),
+    )
+    return any(checks)
+
+
+def _resolve_extracted_mcworld_path(extract_dir: str) -> str:
+    if _looks_like_world_root(extract_dir):
+        return extract_dir
+
+    children = []
+    try:
+        with os.scandir(extract_dir) as entries:
+            for entry in entries:
+                if entry.is_dir():
+                    children.append(entry.path)
+    except OSError:
+        return extract_dir
+
+    if len(children) == 1 and _looks_like_world_root(children[0]):
+        return children[0]
+
+    return extract_dir
+
+
 # Windows 	%APPDATA%\.minecraft
 # macOS 	~/Library/Application Support/minecraft
 # Linux 	~/.minecraft
@@ -440,7 +470,7 @@ class WorldSelectUI(wx.Panel):
 
         wx.MessageBox(lang.get("select_world.extracting_world_finished"), "Info", wx.OK)
 
-        self.open_world_callback(extract_dir)
+        self.open_world_callback(_resolve_extracted_mcworld_path(extract_dir))
 
 
 class RecentWorldUI(wx.Panel):
