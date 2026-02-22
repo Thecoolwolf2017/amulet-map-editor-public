@@ -83,6 +83,7 @@ try:
 
     _configure_windows_dll_search_paths()
     import wx
+    from amulet_map_editor.api.bedrock_open_safety import prepare_bedrock_world_for_open
     import platformdirs
     from typing import NoReturn
     from types import TracebackType
@@ -181,6 +182,11 @@ def _preflight() -> None:
 def _run_world_probe(path: str) -> int:
     import traceback
     import amulet
+
+    try:
+        prepare_bedrock_world_for_open(path)
+    except Exception:
+        pass
 
     world = None
     try:

@@ -12,6 +12,7 @@ from amulet import load_format
 from amulet.api.errors import FormatError
 
 from amulet_map_editor import lang, CONFIG
+from amulet_map_editor.api.bedrock_open_safety import prepare_bedrock_world_for_open
 from amulet_map_editor.api.wx.ui import simple
 from amulet_map_editor.api.wx.ui.traceback_dialog import TracebackDialog
 from amulet_map_editor.api.wx.util.ui_preferences import preserve_ui_preferences
@@ -470,7 +471,12 @@ class WorldSelectUI(wx.Panel):
 
         wx.MessageBox(lang.get("select_world.extracting_world_finished"), "Info", wx.OK)
 
-        self.open_world_callback(_resolve_extracted_mcworld_path(extract_dir))
+        world_path = _resolve_extracted_mcworld_path(extract_dir)
+        try:
+            prepare_bedrock_world_for_open(world_path)
+        except Exception:
+            log.debug("Bedrock post-extract repair failed for %s", world_path, exc_info=True)
+        self.open_world_callback(world_path)
 
 
 class RecentWorldUI(wx.Panel):

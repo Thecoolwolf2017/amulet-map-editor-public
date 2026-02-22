@@ -9,6 +9,7 @@ import subprocess
 from textwrap import dedent
 
 from amulet.api.errors import LoaderNoneMatched
+from amulet_map_editor.api.bedrock_open_safety import prepare_bedrock_world_for_open
 from amulet_map_editor.api.wx.ui.select_world import open_level_from_dialog
 from amulet_map_editor.api.wx.ui.traceback_dialog import TracebackDialog
 from amulet_map_editor import __version__, lang
@@ -30,6 +31,17 @@ NOTEBOOK_STYLE = NOTEBOOK_MENU_STYLE | flatnotebook.FNB_X_ON_TAB
 CLOSEABLE_PAGE_TYPE = Union[WorldPageUI]
 
 wx.Image.SetDefaultLoadFlags(0)
+
+
+def _describe_probe_return_code(return_code: int) -> str:
+    unsigned_code = return_code & 0xFFFFFFFF
+    if unsigned_code == 0xC0000005:
+        return "Probe crashed with access violation (0xC0000005)."
+    if unsigned_code == 0xC0000409:
+        return "Probe crashed with stack buffer overrun (0xC0000409)."
+    if unsigned_code == 0xC000001D:
+        return "Probe crashed with illegal instruction (0xC000001D)."
+    return f"Probe exited with code {return_code} (0x{unsigned_code:08X})."
 
 
 def _preflight_world_open(path: str) -> tuple[bool, str]:
@@ -79,10 +91,13 @@ def _preflight_world_open(path: str) -> tuple[bool, str]:
 
     stderr = (completed.stderr or "").strip()
     stdout = (completed.stdout or "").strip()
-    details = stderr or stdout or f"Exit code {completed.returncode}"
-    lines = details.splitlines()
-    tail = "\n".join(lines[-10:])
-    return False, tail
+    details = stderr or stdout
+    lines = details.splitlines() if details else []
+    tail = "\n".join(lines[-10:]) if lines else ""
+    return False, (
+        f"{_describe_probe_return_code(completed.returncode)}"
+        + (f"\n{tail}" if tail else "")
+    )
 
 
 @preserve_ui_preferences
@@ -212,6 +227,17 @@ class AmuletLevelNotebook(flatnotebook.FlatNotebook):
         if path in self._open_worlds:
             self.SetSelection(self.GetPageIndex(self._open_worlds[path]))
         else:
+            try:
+                applied_actions = prepare_bedrock_world_for_open(path)
+                if applied_actions:
+                    log.debug(
+                        "Applied Bedrock pre-open repairs for %s: %s",
+                        path,
+                        ", ".join(applied_actions),
+                    )
+            except Exception:
+                log.debug("Bedrock pre-open repair failed for %s", path, exc_info=True)
+
             ok, error = _preflight_world_open(path)
             if not ok:
                 log.error(f"World preflight failed for {path}\n{error}")
