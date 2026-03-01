@@ -113,7 +113,7 @@ warning_dialog.i_understand=I Understand
 
 # Update check
 ## The window displayed when a newer version of Amulet is available
-update_check.newer_version_released=A new version of Amulet has been released!
+update_check.newer_version_released=A newer version of Amulet is available.
 update_check.new_version=New Version:
 update_check.current_version=Your Version:
 update_check.update=Go to Download Page

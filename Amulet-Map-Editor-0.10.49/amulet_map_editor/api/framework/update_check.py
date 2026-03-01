@@ -123,6 +123,14 @@ def _get_newest_version(url: str, current_version_str: str) -> Optional[str]:
         pass
 
 
+def should_show_update_dialog(meta_config: dict, new_version: str) -> bool:
+    """Return True if the update dialog should be shown for this release version."""
+
+    if not isinstance(meta_config, dict):
+        return True
+    return meta_config.get("last_update_notified_version") != new_version
+
+
 def _check_for_update(
     listening_parent: wx.EvtHandler, url: str, current_version_str: str
 ):
