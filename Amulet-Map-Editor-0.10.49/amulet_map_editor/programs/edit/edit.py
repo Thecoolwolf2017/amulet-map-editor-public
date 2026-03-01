@@ -318,9 +318,13 @@ class EditExtension(wx.Panel, BaseProgram):
             chunk_cache_padding = self._canvas.renderer.chunk_cache_padding
             camera_sensitivity = self._canvas.camera.rotate_speed
             focus_follows_mouse = self._canvas.focus_follows_mouse
+            edit_config: dict = config.get(EDIT_CONFIG_ID, {})
+            bedrock_addon_resources = edit_config.get("options", {}).get(
+                "bedrock_addon_resources", False
+            )
             dialog = SimpleDialog(self, "Options")
 
-            sizer = wx.FlexGridSizer(5, 2, 0, 0)
+            sizer = wx.FlexGridSizer(6, 2, 0, 0)
             dialog.sizer.Add(sizer, flag=wx.ALL, border=5)
             fov_ui = wx.SpinCtrlDouble(dialog, min=0, max=180, initial=fov)
 
@@ -416,11 +420,26 @@ class EditExtension(wx.Panel, BaseProgram):
                 border=5,
             )
 
+            bedrock_addon_resources_ui = wx.CheckBox(dialog)
+            bedrock_addon_resources_ui.SetValue(bedrock_addon_resources)
+            sizer.Add(
+                wx.StaticText(
+                    dialog,
+                    label="Bedrock Add-on Resources (Experimental)",
+                ),
+                flag=wx.LEFT | wx.TOP | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND,
+                border=5,
+            )
+            sizer.Add(
+                bedrock_addon_resources_ui,
+                flag=wx.LEFT | wx.TOP | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND,
+                border=5,
+            )
+
             dialog.Fit()
 
             response = dialog.ShowModal()
             if response == wx.ID_OK:
-                edit_config: dict = config.get(EDIT_CONFIG_ID, {})
                 edit_config.setdefault("options", {})
                 edit_config["options"]["fov"] = fov_ui.GetValue()
                 edit_config["options"][
@@ -435,6 +454,9 @@ class EditExtension(wx.Panel, BaseProgram):
                 edit_config["options"][
                     "focus_follows_mouse"
                 ] = focus_follows_mouse_ui.GetValue()
+                edit_config["options"][
+                    "bedrock_addon_resources"
+                ] = bedrock_addon_resources_ui.GetValue()
                 config.put(EDIT_CONFIG_ID, edit_config)
             elif response == wx.ID_CANCEL:
                 self._canvas.camera.perspective_fov = fov

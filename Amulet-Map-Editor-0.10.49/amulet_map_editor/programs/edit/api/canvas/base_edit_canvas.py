@@ -32,6 +32,7 @@ from amulet.api.player import LOCAL_PLAYER
 from amulet.api.data_types import OperationYieldType, Dimension
 
 from amulet_map_editor import experimental_bedrock_resources
+from amulet_map_editor.api import config
 from amulet_map_editor.api.opengl.canvas import EventCanvas
 from amulet_map_editor.api.opengl.resource_pack.resource_pack import OpenGLResourcePack
 from amulet_map_editor.programs.edit.api.selection import (
@@ -50,6 +51,7 @@ from ..renderer import Renderer
 from amulet.api.level import BaseLevel
 
 log = logging.getLogger(__name__)
+EDIT_CONFIG_ID = "amulet_edit"
 
 
 class BaseEditCanvas(EventCanvas):
@@ -83,7 +85,11 @@ class BaseEditCanvas(EventCanvas):
         os.makedirs(resource_packs_dir, exist_ok=True)
         if not os.path.isfile(readme_path):
             with open(readme_path, "w") as f:
-                f.write("Put the Java resource pack you want loaded in here.")
+                f.write(
+                    "Put resource packs you want loaded in here.\n"
+                    "- Java worlds use Java packs.\n"
+                    "- Bedrock worlds can use Bedrock packs when 'Bedrock Add-on Resources' is enabled in Options."
+                )
 
         self._renderer: Optional[Renderer] = None
         self._opengl_resource_pack = None
@@ -93,6 +99,12 @@ class BaseEditCanvas(EventCanvas):
         Set up objects that take a while to set up.
         All code in here must be thread safe and not touch the OpenGL state.
         """
+        edit_config = config.get(EDIT_CONFIG_ID, {})
+        use_bedrock_addon_resources = (
+            edit_config.get("options", {}).get("bedrock_addon_resources", False)
+            or experimental_bedrock_resources
+        )
+
         packs = []
         resource_packs_dir = os.path.join(os.environ["DATA_DIR"], "resource_packs")
         user_packs = [
@@ -102,7 +114,7 @@ class BaseEditCanvas(EventCanvas):
         ]
         if (
             self.world.level_wrapper.platform == "bedrock"
-            and experimental_bedrock_resources
+            and use_bedrock_addon_resources
         ):
             packs.append(
                 load_resource_pack(
