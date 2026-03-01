@@ -17,6 +17,12 @@ void main(){
 	);
 	if(texColor.a < 0.02)
         discard;
-    texColor.xyz = texColor.xyz * fTint * 0.85;
+    vec3 tint = fTint;
+    // minecraft_model_reader may emit a pure-green sentinel tint for biome
+    // foliage when no biome colour sampling is available. Use a stable fallback.
+    if (tint.r <= 0.001 && tint.g >= 0.999 && tint.b <= 0.001) {
+        tint = vec3(0.58, 0.74, 0.36);
+    }
+    texColor.xyz = texColor.xyz * tint * 0.85;
 	outColor = texColor;
 }
