@@ -30,6 +30,93 @@ def _on_error(e):
         sys.exit(1)
 
 
+def _configure_probe_windows_dll_search_paths() -> None:
+    import os
+    import sys
+
+    if sys.platform != "win32":
+        return
+
+    candidate_dirs: list[str] = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidate_dirs.extend(
+            [meipass, os.path.join(meipass, "leveldb"), os.path.join(meipass, "wx")]
+        )
+
+    if getattr(sys, "frozen", False):
+        exe_dir = os.path.dirname(sys.executable)
+        internal_dir = os.path.join(exe_dir, "_internal")
+        candidate_dirs.extend(
+            [
+                internal_dir,
+                os.path.join(internal_dir, "leveldb"),
+                os.path.join(internal_dir, "wx"),
+            ]
+        )
+
+    seen_dirs = set()
+    for path in candidate_dirs:
+        if not path:
+            continue
+        norm_path = os.path.normcase(os.path.normpath(path))
+        if norm_path in seen_dirs or not os.path.isdir(path):
+            continue
+        seen_dirs.add(norm_path)
+        try:
+            os.add_dll_directory(path)
+        except (AttributeError, OSError):
+            pass
+
+
+def _run_world_probe_early(path: str) -> int:
+    import traceback
+
+    try:
+        _configure_probe_windows_dll_search_paths()
+        # Keep the same dependency load order as the normal app path.
+        try:
+            import leveldb  # noqa: F401
+        except Exception:
+            leveldb = None
+
+        import amulet
+        from amulet_map_editor.api.bedrock_open_safety import prepare_bedrock_world_for_open
+
+        try:
+            prepare_bedrock_world_for_open(path)
+        except Exception:
+            pass
+
+        world = None
+        try:
+            world = amulet.load_level(path)
+            return 0
+        finally:
+            if world is not None:
+                close = getattr(world, "close", None)
+                if close is not None:
+                    try:
+                        close()
+                    except Exception:
+                        pass
+    except BaseException:
+        traceback.print_exc()
+        return 1
+
+
+try:
+    import sys as _early_sys
+
+    if "--amulet-world-probe" in _early_sys.argv:
+        _index = _early_sys.argv.index("--amulet-world-probe")
+        if _index + 1 >= len(_early_sys.argv):
+            raise Exception("Missing world path for --amulet-world-probe")
+        _early_sys.exit(_run_world_probe_early(_early_sys.argv[_index + 1]))
+except Exception as _early_exc:
+    _on_error(_early_exc)
+
+
 try:
     import sys
 

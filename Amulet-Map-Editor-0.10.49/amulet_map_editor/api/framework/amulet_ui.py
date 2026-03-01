@@ -50,6 +50,23 @@ def _describe_probe_return_code(return_code: int) -> str:
     return f"Probe exited with code {return_code} (0x{unsigned_code:08X})."
 
 
+def _is_known_probe_native_crash(details: str) -> bool:
+    if not isinstance(details, str):
+        return False
+    normalized = details.lower()
+    return any(
+        marker in normalized
+        for marker in (
+            "0xc0000005",
+            "0xc0000409",
+            "0xc000001d",
+            "access violation",
+            "stack buffer overrun",
+            "illegal instruction",
+        )
+    )
+
+
 def _preflight_world_open(path: str) -> tuple[bool, str]:
     """
     Load/close the world in a subprocess first.
@@ -297,16 +314,34 @@ class AmuletLevelNotebook(flatnotebook.FlatNotebook):
                     error = (
                         f"{error}\n\n{cubic_chunks_not_supported_message(path)}"
                     ).strip()
-                log.error(f"World preflight failed for {path}\n{error}")
-                wx.MessageBox(
-                    "Amulet could not safely open this world.\n\n"
-                    "The world loader crashed during preflight.\n\n"
-                    f"Path:\n{path}\n\n"
-                    f"Details:\n{error}",
-                    "World Open Failed",
-                    style=wx.OK | wx.ICON_ERROR,
-                )
-                return
+                    log.error(f"World preflight failed for {path}\n{error}")
+                    wx.MessageBox(
+                        "Amulet could not safely open this world.\n\n"
+                        "The world loader crashed during preflight.\n\n"
+                        f"Path:\n{path}\n\n"
+                        f"Details:\n{error}",
+                        "World Open Failed",
+                        style=wx.OK | wx.ICON_ERROR,
+                    )
+                    return
+
+                if _is_known_probe_native_crash(error):
+                    log.warning(
+                        "World preflight probe crashed for %s; continuing with direct open.\n%s",
+                        path,
+                        error,
+                    )
+                else:
+                    log.error(f"World preflight failed for {path}\n{error}")
+                    wx.MessageBox(
+                        "Amulet could not safely open this world.\n\n"
+                        "The world loader crashed during preflight.\n\n"
+                        f"Path:\n{path}\n\n"
+                        f"Details:\n{error}",
+                        "World Open Failed",
+                        style=wx.OK | wx.ICON_ERROR,
+                    )
+                    return
 
             try:
                 world = WorldPageUI(self, path)
