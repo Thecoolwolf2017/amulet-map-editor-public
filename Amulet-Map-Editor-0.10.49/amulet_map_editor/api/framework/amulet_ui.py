@@ -127,6 +127,10 @@ def _preflight_world_open(path: str) -> tuple[bool, str]:
                 timeout=25,
             )
             if _is_known_native_probe_code(completed.returncode):
+                log.warning(
+                    "World probe returned native crash code on first attempt for %s; retrying with sanitized environment.",
+                    path,
+                )
                 # Retry once with a sanitized environment in case inherited
                 # parent-process variables are destabilizing native deps.
                 retry_completed = subprocess.run(
@@ -137,6 +141,10 @@ def _preflight_world_open(path: str) -> tuple[bool, str]:
                     env=_build_sanitized_probe_env(),
                 )
                 if retry_completed.returncode == 0:
+                    log.info(
+                        "World probe succeeded on sanitized-environment retry for %s.",
+                        path,
+                    )
                     return True, ""
                 completed = retry_completed
         else:
