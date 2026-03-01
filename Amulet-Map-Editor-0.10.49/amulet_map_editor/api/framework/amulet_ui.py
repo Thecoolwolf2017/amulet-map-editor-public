@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 import wx
 from wx.lib.agw import flatnotebook
 from typing import Dict, Union, Callable
@@ -87,6 +88,30 @@ def _sanitize_probe_output(details: str) -> str:
     return "\n".join(filtered_lines[-10:]) if filtered_lines else ""
 
 
+def _build_sanitized_probe_env() -> dict[str, str]:
+    """
+    Build a child-process environment for the world probe that avoids
+    inherited Python/PyInstaller variables from the parent GUI process.
+    """
+    env = os.environ.copy()
+    for key in (
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "PYTHONUSERBASE",
+        "PYTHONNOUSERSITE",
+        "PYTHONBREAKPOINT",
+        "PYTHONUTF8",
+        "PYTHONWARNINGS",
+    ):
+        env.pop(key, None)
+
+    for key in tuple(env):
+        if key.startswith("_PYI") or key.startswith("PYINSTALLER_"):
+            env.pop(key, None)
+
+    return env
+
+
 def _preflight_world_open(path: str) -> tuple[bool, str]:
     """
     Load/close the world in a subprocess first.
@@ -94,12 +119,26 @@ def _preflight_world_open(path: str) -> tuple[bool, str]:
     """
     try:
         if getattr(sys, "frozen", False):
+            probe_cmd = [sys.executable, "--amulet-world-probe", path]
             completed = subprocess.run(
-                [sys.executable, "--amulet-world-probe", path],
+                probe_cmd,
                 capture_output=True,
                 text=True,
                 timeout=25,
             )
+            if _is_known_native_probe_code(completed.returncode):
+                # Retry once with a sanitized environment in case inherited
+                # parent-process variables are destabilizing native deps.
+                retry_completed = subprocess.run(
+                    probe_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=25,
+                    env=_build_sanitized_probe_env(),
+                )
+                if retry_completed.returncode == 0:
+                    return True, ""
+                completed = retry_completed
         else:
             script = dedent("""
                 import sys
