@@ -45,3 +45,13 @@ Compatibility with wayland is done through xwayland for x11 support.
 ## Contributing
 
 For information about contributing to this project, please read the [contribution](contributing.md) file.
+
+## Workspace Layout
+
+- `amulet_map_editor/`: main application code.
+- `tests/`: test suite.
+- `scripts/`: automation and release helper scripts.
+- `docs/`: release and implementation docs.
+- `dist/`: built artifacts (`dist/Amulet/amulet_app.exe`, release zips, checksums).
+
+See also: [docs/workspace-layout.md](docs/workspace-layout.md) for cleanup guidance.

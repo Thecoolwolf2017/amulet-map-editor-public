@@ -25,7 +25,6 @@ If `WINDOWS_SIGN_TIMESTAMP_URL` is not set, the workflow defaults to:
 
 ## What the Workflow Signs
 - `dist/Amulet/amulet_app.exe`
-- `dist/Amulet/amulet_app_debug.exe`
 
 Signing runs in CI on Windows builds. It uses trusted-cert secrets when available,
 otherwise it falls back to a generated self-signed certificate.
