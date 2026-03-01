@@ -67,6 +67,26 @@ def _is_known_probe_native_crash(details: str) -> bool:
     )
 
 
+def _is_known_native_probe_code(return_code: int) -> bool:
+    unsigned_code = return_code & 0xFFFFFFFF
+    return unsigned_code in (0xC0000005, 0xC0000409, 0xC000001D)
+
+
+def _sanitize_probe_output(details: str) -> str:
+    if not details:
+        return ""
+    filtered_lines = []
+    for line in details.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        upper = stripped.upper()
+        if upper.startswith("INFO -") or upper.startswith("DEBUG -"):
+            continue
+        filtered_lines.append(stripped)
+    return "\n".join(filtered_lines[-10:]) if filtered_lines else ""
+
+
 def _preflight_world_open(path: str) -> tuple[bool, str]:
     """
     Load/close the world in a subprocess first.
@@ -131,15 +151,15 @@ def _preflight_world_open(path: str) -> tuple[bool, str]:
     if completed.returncode == 0:
         return True, ""
 
+    description = _describe_probe_return_code(completed.returncode)
+    if _is_known_native_probe_code(completed.returncode):
+        # Keep the error concise for native probe crashes.
+        return False, description
+
     stderr = (completed.stderr or "").strip()
     stdout = (completed.stdout or "").strip()
-    details = stderr or stdout
-    lines = details.splitlines() if details else []
-    tail = "\n".join(lines[-10:]) if lines else ""
-    return False, (
-        f"{_describe_probe_return_code(completed.returncode)}"
-        + (f"\n{tail}" if tail else "")
-    )
+    details = _sanitize_probe_output(stderr or stdout)
+    return False, description + (f"\n{details}" if details else "")
 
 
 @preserve_ui_preferences
