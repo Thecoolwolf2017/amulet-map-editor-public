@@ -326,22 +326,31 @@ class AmuletLevelNotebook(flatnotebook.FlatNotebook):
                     return
 
                 if _is_known_probe_native_crash(error):
-                    log.warning(
-                        "World preflight probe crashed for %s; continuing with direct open.\n%s",
+                    log.error(
+                        "World preflight probe crashed for %s; refusing direct open to prevent app crash.\n%s",
                         path,
                         error,
                     )
-                else:
-                    log.error(f"World preflight failed for {path}\n{error}")
                     wx.MessageBox(
                         "Amulet could not safely open this world.\n\n"
-                        "The world loader crashed during preflight.\n\n"
+                        "The world loader crashed with a native access violation during preflight.\n"
+                        "Opening it directly would crash the editor, so this open request was blocked.\n\n"
                         f"Path:\n{path}\n\n"
                         f"Details:\n{error}",
                         "World Open Failed",
                         style=wx.OK | wx.ICON_ERROR,
                     )
                     return
+                log.error(f"World preflight failed for {path}\n{error}")
+                wx.MessageBox(
+                    "Amulet could not safely open this world.\n\n"
+                    "The world loader crashed during preflight.\n\n"
+                    f"Path:\n{path}\n\n"
+                    f"Details:\n{error}",
+                    "World Open Failed",
+                    style=wx.OK | wx.ICON_ERROR,
+                )
+                return
 
             try:
                 world = WorldPageUI(self, path)
