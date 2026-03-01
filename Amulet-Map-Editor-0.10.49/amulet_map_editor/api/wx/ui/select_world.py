@@ -418,9 +418,9 @@ class WorldSelectUI(wx.Panel):
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
 
-        header_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(header_sizer, 0, wx.EXPAND)
-        header_sizer.AddStretchSpacer()
+        # Wrap controls so both buttons remain reachable on narrow layouts.
+        header_sizer = wx.WrapSizer(wx.HORIZONTAL)
+        sizer.Add(header_sizer, 0, wx.ALIGN_CENTER_HORIZONTAL | wx.TOP, 2)
 
         self.header_open_world = wx.Button(
             self, label=lang.get("select_world.open_world_button")
@@ -429,9 +429,7 @@ class WorldSelectUI(wx.Panel):
         font.SetPointSize(16)
         self.header_open_world.SetFont(font)
         self.header_open_world.Bind(wx.EVT_BUTTON, self._open_world)
-        header_sizer.Add(self.header_open_world)
-
-        header_sizer.AddSpacer(20)
+        header_sizer.Add(self.header_open_world, 0, wx.ALL, 4)
 
         self.header_open_mcworld = wx.Button(
             self, label=lang.get("select_world.open_mcworld_button")
@@ -440,9 +438,7 @@ class WorldSelectUI(wx.Panel):
         font.SetPointSize(16)
         self.header_open_mcworld.SetFont(font)
         self.header_open_mcworld.Bind(wx.EVT_BUTTON, self._open_mcworld)
-        header_sizer.Add(self.header_open_mcworld)
-
-        header_sizer.AddStretchSpacer()
+        header_sizer.Add(self.header_open_mcworld, 0, wx.ALL, 4)
 
         content = ScrollableWorldsUI(self, open_world_callback)
         sizer.Add(content, 1, wx.EXPAND)

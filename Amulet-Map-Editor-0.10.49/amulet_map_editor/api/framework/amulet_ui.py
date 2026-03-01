@@ -88,6 +88,16 @@ def _sanitize_probe_output(details: str) -> str:
     return "\n".join(filtered_lines[-10:]) if filtered_lines else ""
 
 
+def _is_loader_none_matched_probe(details: str) -> bool:
+    if not isinstance(details, str):
+        return False
+    normalized = details.lower()
+    return (
+        "loadernonematched" in normalized
+        or "could not find a matching format" in normalized
+    )
+
+
 def _build_sanitized_probe_env() -> dict[str, str]:
     """
     Build a child-process environment for the world probe that avoids
@@ -205,7 +215,14 @@ def _preflight_world_open(path: str) -> tuple[bool, str]:
 
     stderr = (completed.stderr or "").strip()
     stdout = (completed.stdout or "").strip()
-    details = _sanitize_probe_output(stderr or stdout)
+    raw_details = stderr or stdout
+    if _is_loader_none_matched_probe(raw_details):
+        return (
+            False,
+            "The selected path is not a supported Minecraft world format.",
+        )
+
+    details = _sanitize_probe_output(raw_details)
     return False, description + (f"\n{details}" if details else "")
 
 
@@ -388,6 +405,21 @@ class AmuletLevelNotebook(flatnotebook.FlatNotebook):
                         f"Path:\n{path}\n\n"
                         f"Details:\n{error}",
                         "World Open Failed",
+                        style=wx.OK | wx.ICON_ERROR,
+                    )
+                    return
+
+                if _is_loader_none_matched_probe(error):
+                    log.warning(
+                        "World preflight rejected unsupported world path: %s",
+                        path,
+                    )
+                    wx.MessageBox(
+                        "Amulet could not identify this path as a supported Minecraft world.\n\n"
+                        f"Path:\n{path}\n\n"
+                        "If this is a Bedrock export archive, use:\n"
+                        "Open Bedrock .mcworld File",
+                        "Invalid World Path",
                         style=wx.OK | wx.ICON_ERROR,
                     )
                     return
