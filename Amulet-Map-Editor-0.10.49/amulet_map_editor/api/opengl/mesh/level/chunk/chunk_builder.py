@@ -62,7 +62,7 @@ class RenderChunkBuilder(TriMesh):
         self.draw_count = int(self.verts.size // self._vert_len)
 
     def _create_lod0_multi(
-        self, blocks: List[Tuple[numpy.ndarray, int]]
+        self, blocks: List[Tuple[numpy.ndarray, int]], block_palette
     ) -> Tuple[List[numpy.ndarray], List[numpy.ndarray]]:
         """Create LOD0 geometry data for every sub-chunk in a given chunk.
 
@@ -73,6 +73,6 @@ class RenderChunkBuilder(TriMesh):
             self.resource_pack,
             self.offset,
             blocks,
-            self.chunk.block_palette,
+            block_palette,
             self._vert_len,
         )

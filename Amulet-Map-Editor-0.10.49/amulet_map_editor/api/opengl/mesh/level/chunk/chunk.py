@@ -6,9 +6,11 @@ import logging
 
 from amulet.api.errors import ChunkLoadError, ChunkDoesNotExist
 from amulet.api.chunk.blocks import Blocks
+from amulet.api.block import Block
 from amulet.api.data_types import Dimension
 from amulet.api.level import BaseLevel
 from amulet.api.selection import SelectionBox
+from amulet_nbt import StringTag
 
 from .chunk_builder import RenderChunkBuilder
 from amulet_map_editor.api.opengl.resource_pack import OpenGLResourcePack
@@ -169,6 +171,93 @@ class RenderChunk(RenderChunkBuilder):
             sub_chunks.append((larger_blocks, cy * 16))
         return sub_chunks
 
+    @staticmethod
+    def _is_connectable_fence_block(block: Block) -> bool:
+        return (
+            block.namespace == "universal_minecraft"
+            and block.base_name in ("fence", "fence_gate")
+        )
+
+    @staticmethod
+    def _prop_is_true(value) -> bool:
+        return str(value).lower() == "true"
+
+    @staticmethod
+    def _set_bool_string_prop(props: dict, key: str, value: bool) -> None:
+        existing = props.get(key)
+        tag_type = type(existing) if existing is not None else StringTag
+        props[key] = tag_type("true" if value else "false")
+
+    def _apply_bedrock_fence_visual_fix(
+        self, sub_chunks: List[Tuple[numpy.ndarray, int]], block_palette
+    ) -> Tuple[List[Tuple[numpy.ndarray, int]], list]:
+        """
+        Bedrock does not always persist fence connect states in a way that survives
+        translation. Synthesize directional fence states from neighboring blocks for
+        rendering only. This does not modify world data on disk.
+        """
+        mutable_palette = list(block_palette)
+        variant_cache: dict[tuple[int, bool, bool, bool, bool], int] = {}
+        fixed_sub_chunks: List[Tuple[numpy.ndarray, int]] = []
+
+        for larger_blocks, sub_chunk_y in sub_chunks:
+            fixed_blocks = larger_blocks.copy()
+            sx, sy, sz = fixed_blocks.shape
+
+            for x in range(1, sx - 1):
+                for y in range(1, sy - 1):
+                    for z in range(1, sz - 1):
+                        block_index = int(fixed_blocks[x, y, z])
+                        block = mutable_palette[block_index]
+                        if not self._is_connectable_fence_block(block):
+                            continue
+
+                        east = self._is_connectable_fence_block(
+                            mutable_palette[int(fixed_blocks[x + 1, y, z])]
+                        )
+                        west = self._is_connectable_fence_block(
+                            mutable_palette[int(fixed_blocks[x - 1, y, z])]
+                        )
+                        south = self._is_connectable_fence_block(
+                            mutable_palette[int(fixed_blocks[x, y, z + 1])]
+                        )
+                        north = self._is_connectable_fence_block(
+                            mutable_palette[int(fixed_blocks[x, y, z - 1])]
+                        )
+
+                        props = block.properties
+                        if (
+                            self._prop_is_true(props.get("east", "false")) == east
+                            and self._prop_is_true(props.get("west", "false")) == west
+                            and self._prop_is_true(props.get("south", "false"))
+                            == south
+                            and self._prop_is_true(props.get("north", "false"))
+                            == north
+                        ):
+                            continue
+
+                        variant_key = (block_index, east, west, south, north)
+                        if variant_key not in variant_cache:
+                            new_props = dict(props)
+                            self._set_bool_string_prop(new_props, "east", east)
+                            self._set_bool_string_prop(new_props, "west", west)
+                            self._set_bool_string_prop(new_props, "south", south)
+                            self._set_bool_string_prop(new_props, "north", north)
+                            new_block = Block(
+                                block.namespace,
+                                block.base_name,
+                                new_props,
+                                block.extra_blocks or None,
+                            )
+                            variant_cache[variant_key] = len(mutable_palette)
+                            mutable_palette.append(new_block)
+
+                        fixed_blocks[x, y, z] = variant_cache[variant_key]
+
+            fixed_sub_chunks.append((fixed_blocks, sub_chunk_y))
+
+        return fixed_sub_chunks, mutable_palette
+
     def create_geometry(self):
         try:
             chunk = self.chunk
@@ -182,8 +271,15 @@ class RenderChunk(RenderChunkBuilder):
         else:
             self._changed_time = chunk.changed_time
             self._chunk_state = 2
+            sub_chunks = self._sub_chunks(chunk.blocks)
+            block_palette = chunk.block_palette
+            if self._level.level_wrapper.platform == "bedrock":
+                sub_chunks, block_palette = self._apply_bedrock_fence_visual_fix(
+                    sub_chunks, block_palette
+                )
+
             chunk_verts, chunk_verts_translucent = self._create_lod0_multi(
-                self._sub_chunks(chunk.blocks)
+                sub_chunks, block_palette
             )
             self._set_verts(chunk_verts, chunk_verts_translucent)
             if self._draw_floor or self._draw_ceil:
