@@ -67,10 +67,29 @@ def _preflight_world_open(path: str) -> tuple[bool, str]:
             script = dedent("""
                 import sys
                 import traceback
+
+                try:
+                    # Match normal app startup: load leveldb before wx/native world APIs.
+                    import leveldb  # noqa: F401
+                except Exception:
+                    leveldb = None
+
                 import amulet
+
+                try:
+                    from amulet_map_editor.api.bedrock_open_safety import (
+                        prepare_bedrock_world_for_open,
+                    )
+                except Exception:
+                    prepare_bedrock_world_for_open = None
 
                 world = None
                 try:
+                    if callable(prepare_bedrock_world_for_open):
+                        try:
+                            prepare_bedrock_world_for_open(sys.argv[1])
+                        except Exception:
+                            pass
                     world = amulet.load_level(sys.argv[1])
                 except BaseException:
                     traceback.print_exc()

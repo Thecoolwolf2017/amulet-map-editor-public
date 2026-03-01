@@ -82,6 +82,8 @@ try:
                 pass
 
     _configure_windows_dll_search_paths()
+    # Import leveldb before wx to avoid a native crash when opening Bedrock worlds.
+    import leveldb
     import wx
     from amulet_map_editor.api.bedrock_open_safety import prepare_bedrock_world_for_open
     import platformdirs
