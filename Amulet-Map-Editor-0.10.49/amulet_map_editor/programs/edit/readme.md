@@ -15,6 +15,9 @@ The controls are customizable in `Options` -> `Controls...`, but the defaults ar
 - right `D`
 - down: `Shift`
 - up: `Spacebar`
+- cursor x-axis: `Left` and `Right`
+- cursor y-axis: `Page Down` and `Page Up`
+- cursor z-axis: `Up` and `Down`
 - camera rotation: `Right mouse button`. Click to toggle, hold to drag.
     - Also changes selection mode. Closest non-air block when not rotating. Fixed distance when rotating.
 - select box corner: `Left mouse button`. Click to toggle, hold to drag.
@@ -25,6 +28,20 @@ The controls are customizable in `Options` -> `Controls...`, but the defaults ar
 - change fly speed: `Scroll wheel`
 - inspect block: `Alt`
 - change projection: `Tab`
+- switch to Select mode: `Ctrl` + `S`
+- switch to Paste mode (from clipboard cache): `Ctrl` + `V`
+- switch to Operation mode: `Ctrl` + `O`
+- Operation mode quick-select:
+  - `Ctrl` + `W`: Waterlog
+  - `Ctrl` + `Q`: Clone
+  - `Ctrl` + `E`: Fill
+  - `Ctrl` + `R`: Replace
+  - `Ctrl` + `B`: Set Biome
+  - `Ctrl` + `F`: focus the operation selector
+
+Rendering and camera options are available in `Options` -> `Options...`.
+`Chunk Cache Padding` controls how many extra chunks (beyond render distance) are kept in memory to reduce chunk reload churn at the cost of increased RAM usage.
+`Focus Follows Mouse` controls whether moving the mouse over the 3D canvas automatically shifts keyboard focus to the canvas.
 
 The rest of this guide will refer to the default keys.
 
@@ -36,7 +53,7 @@ In the top right is the file panel which will allow you to do a number of useful
 - Dimension: Select which dimension is active
 - Undo: Undo the last change. (`Ctrl` + `Z`)
 - Redo: Reapply an undone change. (`Ctrl` + `Y`)
-- Save: Save all changes to the world. Any changes in the editor are saved in the editor until the user requests them to be saved to the world. (`Ctrl` + `S`)
+- Save: Save all changes to the world. Any changes in the editor are saved in the editor until the user requests them to be saved to the world. (`Ctrl` + `Shift` + `S`)
 - Close: Close the current world.
 
 ## Tools
@@ -66,6 +83,9 @@ To use these, click on the button and use the movement controls (WASD, Shift and
 `Move Point 1` and `Move Point 2` will move the green and blue points respectively.
 `Move Box` will move both points at the same time causing the whole box to move.
 
+You can also move the active selection box directly with the keyboard using `Left`/`Right` (x),
+`Page Down`/`Page Up` (y), and `Up`/`Down` (z) without clicking any move button.
+
 #### Copy and Paste
 
 - Select an area and press the copy button in the select tool or (`Ctrl` + `C`) or (`Edit` -> `Copy`)
@@ -78,6 +98,9 @@ To use these, click on the button and use the movement controls (WASD, Shift and
 If you have previously copied a selection you paste it into the world (`Ctrl` + `V` or `Edit` > `Paste`) which will bring you to this tool.
 
 You can place the structure down roughly where you want it and use the UI to move it to exactly where you want it.
+When pasting from a recent copy/cut, paste mode starts at the copied coordinates (including cross-world and cross-dimension paste) and does not follow the pointer until you click to toggle move mode.
+When the structure is not in pointer-follow mode, you can also nudge location with
+`Left`/`Right` (x), `Page Down`/`Page Up` (y), and `Up`/`Down` (z).
 
 The UI also allows rotation, scale and mirroring.
 
@@ -101,7 +124,9 @@ As of writing they are:
 - Select an area of the world you would like the operation to run on.
 - Select the operation from the list of operations.
 - Fill: Select the block you wish to fill the area with.
-- Replace: Select the block you would like to replace (use * to match any value of that property) and select the block you would like to fill it with.
+- Replace: Build a list of source blocks to match (use * to match any value of that property), select a replacement block, and choose match mode:
+  - `Any Of`: replace listed source blocks.
+  - `None Of`: replace everything except listed source blocks.
 -Run the operation.
 -Undo will undo the changes and save will apply them to the world files.
 
@@ -118,5 +143,6 @@ You can just copy from one world and without closing Amulet open the second worl
 
 This tool will allow you to chunk based modifications.
 
+Delete Empty Chunks: Deletes selected chunks that only contain air so Minecraft can regenerate terrain from the world seed next time those chunks are loaded in-game.
 Delete Chunks: The chunks in the selected area will be deleted. The game will recreate them next time you visit them in game.
 Delete Unselected Chunks: The chunks that are not in the selected area will be deleted. The game will recreate them next time you visit them in game.

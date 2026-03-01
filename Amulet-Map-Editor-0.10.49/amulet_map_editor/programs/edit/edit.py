@@ -21,6 +21,7 @@ from amulet_map_editor.programs.edit.api.key_config import (
     DefaultKeybindGroupId,
     PresetKeybinds,
     KeybindKeys,
+    merge_with_default_keybinds,
 )
 from amulet_map_editor.programs.edit.api.backup import (
     backups_enabled,
@@ -135,8 +136,14 @@ class EditExtension(wx.Panel, BaseProgram):
             self._canvas.renderer.render_distance = edit_config.get("options", {}).get(
                 "render_distance", 5
             )
+            self._canvas.renderer.chunk_cache_padding = edit_config.get(
+                "options", {}
+            ).get("chunk_cache_padding", 5)
             self._canvas.camera.rotate_speed = edit_config.get("options", {}).get(
                 "camera_sensitivity", 2.0
+            )
+            self._canvas.focus_follows_mouse = edit_config.get("options", {}).get(
+                "focus_follows_mouse", False
             )
 
             self._temp_msg = None
@@ -221,7 +228,7 @@ class EditExtension(wx.Panel, BaseProgram):
         menu.setdefault(lang.get("menu_bar.file.menu_name"), {}).setdefault(
             "system", {}
         ).setdefault(
-            f"{lang.get('program_3d_edit.menu_bar.file.save')}\tCtrl+s",
+            f"{lang.get('program_3d_edit.menu_bar.file.save')}\tCtrl+Shift+s",
             lambda evt: self._canvas.save(),
         )
         menu.setdefault(lang.get("menu_bar.file.menu_name"), {}).setdefault(
@@ -300,16 +307,20 @@ class EditExtension(wx.Panel, BaseProgram):
             edit_config["keybind_group"] = keybind_id
             config.put(EDIT_CONFIG_ID, edit_config)
             self._canvas.buttons.clear_registered_actions()
-            self._canvas.buttons.register_actions(keybinds)
+            self._canvas.buttons.register_actions(
+                merge_with_default_keybinds(keybinds)
+            )
 
     def _edit_options(self):
         if self._canvas is not None:
             fov = self._canvas.camera.perspective_fov
             render_distance = self._canvas.renderer.render_distance
+            chunk_cache_padding = self._canvas.renderer.chunk_cache_padding
             camera_sensitivity = self._canvas.camera.rotate_speed
+            focus_follows_mouse = self._canvas.focus_follows_mouse
             dialog = SimpleDialog(self, "Options")
 
-            sizer = wx.FlexGridSizer(3, 2, 0, 0)
+            sizer = wx.FlexGridSizer(5, 2, 0, 0)
             dialog.sizer.Add(sizer, flag=wx.ALL, border=5)
             fov_ui = wx.SpinCtrlDouble(dialog, min=0, max=180, initial=fov)
 
@@ -347,6 +358,27 @@ class EditExtension(wx.Panel, BaseProgram):
                 border=5,
             )
 
+            chunk_cache_padding_ui = wx.SpinCtrl(
+                dialog, min=0, max=500, initial=chunk_cache_padding
+            )
+
+            def set_chunk_cache_padding(evt):
+                self._canvas.renderer.chunk_cache_padding = (
+                    chunk_cache_padding_ui.GetValue()
+                )
+
+            chunk_cache_padding_ui.Bind(wx.EVT_SPINCTRL, set_chunk_cache_padding)
+            sizer.Add(
+                wx.StaticText(dialog, label="Chunk Cache Padding"),
+                flag=wx.LEFT | wx.TOP | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND,
+                border=5,
+            )
+            sizer.Add(
+                chunk_cache_padding_ui,
+                flag=wx.LEFT | wx.TOP | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND,
+                border=5,
+            )
+
             camera_sensitivity_ui = wx.SpinCtrlDouble(
                 dialog, min=0, max=10, initial=camera_sensitivity
             )
@@ -366,6 +398,24 @@ class EditExtension(wx.Panel, BaseProgram):
                 border=5,
             )
 
+            focus_follows_mouse_ui = wx.CheckBox(dialog)
+            focus_follows_mouse_ui.SetValue(focus_follows_mouse)
+
+            def set_focus_follows_mouse(evt):
+                self._canvas.focus_follows_mouse = focus_follows_mouse_ui.GetValue()
+
+            focus_follows_mouse_ui.Bind(wx.EVT_CHECKBOX, set_focus_follows_mouse)
+            sizer.Add(
+                wx.StaticText(dialog, label="Focus Follows Mouse"),
+                flag=wx.LEFT | wx.TOP | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND,
+                border=5,
+            )
+            sizer.Add(
+                focus_follows_mouse_ui,
+                flag=wx.LEFT | wx.TOP | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND,
+                border=5,
+            )
+
             dialog.Fit()
 
             response = dialog.ShowModal()
@@ -377,13 +427,21 @@ class EditExtension(wx.Panel, BaseProgram):
                     "render_distance"
                 ] = render_distance_ui.GetValue()
                 edit_config["options"][
+                    "chunk_cache_padding"
+                ] = chunk_cache_padding_ui.GetValue()
+                edit_config["options"][
                     "camera_sensitivity"
                 ] = camera_sensitivity_ui.GetValue()
+                edit_config["options"][
+                    "focus_follows_mouse"
+                ] = focus_follows_mouse_ui.GetValue()
                 config.put(EDIT_CONFIG_ID, edit_config)
             elif response == wx.ID_CANCEL:
                 self._canvas.camera.perspective_fov = fov
                 self._canvas.renderer.render_distance = render_distance
+                self._canvas.renderer.chunk_cache_padding = chunk_cache_padding
                 self._canvas.camera.rotate_speed = camera_sensitivity
+                self._canvas.focus_follows_mouse = focus_follows_mouse
 
     def _edit_backup_settings(self):
         if self._canvas is None:

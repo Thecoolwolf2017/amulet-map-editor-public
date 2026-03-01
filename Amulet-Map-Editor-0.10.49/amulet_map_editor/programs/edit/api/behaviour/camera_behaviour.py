@@ -29,6 +29,7 @@ from ..key_config import (
     ACT_ZOOM_OUT,
     ACT_CHANGE_PROJECTION,
 )
+from ..focus_options import should_focus_canvas_on_mouse_motion
 
 if TYPE_CHECKING:
     from amulet_map_editor.programs.edit.api.canvas import EditCanvas
@@ -53,7 +54,11 @@ class CameraBehaviour(BaseBehaviour):
         self.canvas.Bind(wx.EVT_MOTION, self._on_mouse_motion)
 
     def _on_mouse_motion(self, evt):
-        self.canvas.SetFocus()
+        if should_focus_canvas_on_mouse_motion(
+            getattr(self.canvas, "focus_follows_mouse", False),
+            self.canvas.camera.rotating,
+        ):
+            self.canvas.SetFocus()
         evt.Skip()
 
     def _on_key_press(self, evt: wx.KeyEvent):

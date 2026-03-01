@@ -14,6 +14,7 @@ from ..key_config import (
     DefaultKeybindGroupId,
     PresetKeybinds,
     KeybindGroup,
+    merge_with_default_keybinds,
 )
 
 import time
@@ -40,6 +41,7 @@ from amulet_map_editor.programs.edit.api.backup import (
     backups_enabled,
     iter_backup,
 )
+from amulet_map_editor.programs.edit.api.clipboard_state import get_clipboard_state
 from amulet_map_editor.programs.edit.plugins.operations.stock_plugins.internal_operations import (
     cut,
     copy,
@@ -158,6 +160,7 @@ class EditCanvas(BaseEditCanvas):
         super().__init__(parent, world)
         self._file_panel: Optional[FilePanel] = None
         self._tool_sizer: Optional[ToolManagerSizer] = None
+        self._focus_follows_mouse = False
         self.buttons.register_actions(self.key_binds)
 
         self._canvas_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -201,16 +204,25 @@ class EditCanvas(BaseEditCanvas):
         return self._tool_sizer.tools
 
     @property
+    def focus_follows_mouse(self) -> bool:
+        return self._focus_follows_mouse
+
+    @focus_follows_mouse.setter
+    def focus_follows_mouse(self, value: bool):
+        self._focus_follows_mouse = bool(value)
+
+    @property
     def key_binds(self) -> KeybindGroup:
         config_ = CONFIG.get(EDIT_CONFIG_ID, {})
         user_keybinds = config_.get("user_keybinds", {})
         group = config_.get("keybind_group", DefaultKeybindGroupId)
         if group in user_keybinds:
-            return user_keybinds[group]
+            keybinds = user_keybinds[group]
         elif group in PresetKeybinds:
-            return PresetKeybinds[group]
+            keybinds = PresetKeybinds[group]
         else:
-            return DefaultKeys
+            keybinds = DefaultKeys
+        return merge_with_default_keybinds(keybinds)
 
     def _deselect(self):
         # TODO: Re-implement this
@@ -353,7 +365,12 @@ class EditCanvas(BaseEditCanvas):
             lambda: copy(self.world, self.dimension, self.selection.selection_group)
         )
 
-    def paste(self, structure: BaseLevel, dimension: Dimension):
+    def paste(
+        self,
+        structure: BaseLevel,
+        dimension: Dimension,
+        clipboard_state: Optional[dict] = None,
+    ):
         assert isinstance(
             structure, BaseLevel
         ), "Structure given is not a subclass of BaseLevel."
@@ -363,13 +380,19 @@ class EditCanvas(BaseEditCanvas):
         wx.PostEvent(
             self,
             ToolChangeEvent(
-                tool="Paste", state={"structure": structure, "dimension": dimension}
+                tool="Paste",
+                state={
+                    "structure": structure,
+                    "dimension": dimension,
+                    "clipboard_state": clipboard_state,
+                },
             ),
         )
 
     def paste_from_cache(self):
         if structure_cache:
-            self.paste(*structure_cache.get_structure())
+            structure, dimension = structure_cache.get_structure()
+            self.paste(structure, dimension, get_clipboard_state())
         else:
             wx.MessageBox("A structure needs to be copied before one can be pasted.")
 

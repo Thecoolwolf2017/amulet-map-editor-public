@@ -8,6 +8,7 @@ from amulet_map_editor.programs.edit.api.operations import (
     OperationError,
 )
 from amulet.api.data_types import OperationReturnType
+from amulet_map_editor.programs.edit.api.clipboard_state import record_clipboard_origin
 
 if TYPE_CHECKING:
     from amulet.api.level import BaseLevel
@@ -17,6 +18,7 @@ def copy(
     world: "BaseLevel", dimension: Dimension, selection: SelectionGroup
 ) -> OperationReturnType:
     if selection:
+        record_clipboard_origin(getattr(world, "level_path", None), dimension, selection)
         yield 0, "Copying"
         structure = yield from world.extract_structure_iter(selection, dimension)
         structure_cache.add_structure(structure, structure.dimensions[0])

@@ -191,3 +191,32 @@ class BaseOperationChoiceToolUI(wx.BoxSizer, BaseToolUI):
         else:
             opener = "open" if sys.platform == "darwin" else "xdg-open"
             subprocess.call([opener, path])
+
+    def focus_operation_choice(self):
+        """Focus the operation selection control."""
+        self._operation_choice.SetFocus()
+
+    def select_operation_from_keywords(self, *keywords: str) -> bool:
+        """Select an operation by keyword match against identifier or display name."""
+        terms = tuple(
+            keyword.lower().strip() for keyword in keywords if keyword and keyword.strip()
+        )
+        if not terms:
+            return False
+
+        identifiers = self._operation_choice.values
+        if not identifiers:
+            return False
+
+        operation_map = {operation.identifier: operation for operation in self._operations.operations}
+        for index, identifier in enumerate(identifiers):
+            operation = operation_map.get(identifier)
+            haystack = f"{identifier} {operation.name if operation is not None else ''}".lower()
+            if all(term in haystack for term in terms):
+                if self._operation_choice.GetSelection() != index:
+                    self._operation_choice.SetSelection(index)
+                    self._setup_operation()
+                    self.canvas.reset_bound_events()
+                return True
+
+        return False

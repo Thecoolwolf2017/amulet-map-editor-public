@@ -199,6 +199,12 @@ action.act_deselect_all_boxes=Deselect All Boxes
 action.act_deselect_box=Deselect Active Box
 action.act_inspect_block=Inspect Block
 action.act_change_projection=Toggle Projection
+action.act_cursor_decrease_x=Move Cursor X-
+action.act_cursor_increase_x=Move Cursor X+
+action.act_cursor_decrease_y=Move Cursor Y-
+action.act_cursor_increase_y=Move Cursor Y+
+action.act_cursor_decrease_z=Move Cursor Z-
+action.act_cursor_increase_z=Move Cursor Z+
 
 ## Menu bar
 program_3d_edit.menu_bar.file.save=Save
@@ -296,6 +302,8 @@ program_3d_edit.chunk_tool.max_y=Max Y
 program_3d_edit.chunk_tool.max_y_tooltip=The maximum y coordinate to draw in the top down view. This can be used to view a slice of the world and help view dimensions like the nether and caves.
 program_3d_edit.chunk_tool.create_chunks=Create Empty Chunks
 program_3d_edit.chunk_tool.create_chunks_tooltip=Create all chunks in the selection that do not already exist. Chunks that already exists will remain unchanged.
+program_3d_edit.chunk_tool.delete_empty_chunks=Delete Empty Chunks
+program_3d_edit.chunk_tool.delete_empty_chunks_tooltip=Delete selected chunks that only contain air blocks. This is useful for removing accidental empty chunks so the game can regenerate them from the world seed when loaded in-game.
 program_3d_edit.chunk_tool.delete_chunks=Delete Chunks
 program_3d_edit.chunk_tool.delete_chunks_tooltip=Delete the selected chunks. This will delete the actual chunk and all the data contained within it. Next time you load the area in game it will recreate the chunks.
 program_3d_edit.chunk_tool.prune_chunks=Delete Unselected Chunks

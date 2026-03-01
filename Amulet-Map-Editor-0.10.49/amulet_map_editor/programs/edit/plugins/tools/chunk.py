@@ -23,6 +23,7 @@ from amulet.api.chunk import Chunk
 from amulet_map_editor.programs.edit.plugins.operations.stock_plugins.internal_operations.prune_chunks import (
     prune_chunks,
 )
+from .chunk_filters import chunk_is_effectively_empty
 
 if TYPE_CHECKING:
     from amulet_map_editor.programs.edit.api.canvas import EditCanvas
@@ -84,6 +85,18 @@ class ChunkTool(wx.BoxSizer, DefaultBaseToolUI):
             create_button, 0, wx.LEFT | wx.BOTTOM | wx.RIGHT | wx.EXPAND, 5
         )
         create_button.Bind(wx.EVT_BUTTON, self._create_chunks)
+
+        delete_empty_button = wx.Button(
+            self._button_panel,
+            label=lang.get("program_3d_edit.chunk_tool.delete_empty_chunks"),
+        )
+        delete_empty_button.SetToolTip(
+            lang.get("program_3d_edit.chunk_tool.delete_empty_chunks_tooltip")
+        )
+        button_sizer.Add(
+            delete_empty_button, 0, wx.LEFT | wx.BOTTOM | wx.RIGHT | wx.EXPAND, 5
+        )
+        delete_empty_button.Bind(wx.EVT_BUTTON, self._delete_empty_chunks)
 
         delete_button = wx.Button(
             self._button_panel,
@@ -241,6 +254,49 @@ class ChunkTool(wx.BoxSizer, DefaultBaseToolUI):
                     load_original,
                 )
             )
+
+    def _delete_empty_chunks(self, evt):
+        load_original = self._ask_delete_chunks()
+        if load_original is None:
+            return
+
+        def delete_empty_chunks(
+            world: BaseLevel,
+            dimension: Dimension,
+            selection: SelectionGroup,
+            load_original_state: bool,
+        ):
+            chunks = []
+            for cx, cz in selection.chunk_locations():
+                if not world.has_chunk(cx, cz, dimension):
+                    continue
+                chunk = world.get_chunk(cx, cz, dimension)
+                if chunk_is_effectively_empty(world, chunk):
+                    chunks.append((cx, cz))
+
+            iter_count = len(chunks)
+            if iter_count == 0:
+                return
+
+            for count, (cx, cz) in enumerate(chunks):
+                world.delete_chunk(cx, cz, dimension)
+
+                if not load_original_state:
+                    # Same undo history behavior as amulet.operations.delete_chunk.
+                    key = dimension, cx, cz
+                    if key not in world.chunks._history_database:
+                        world.chunks._register_original_entry(key, Chunk(cx, cz))
+
+                yield (count + 1) / iter_count
+
+        self.canvas.run_operation(
+            lambda: delete_empty_chunks(
+                self.canvas.world,
+                self.canvas.dimension,
+                self.canvas.selection.selection_group,
+                load_original,
+            )
+        )
 
     def _prune_chunks(self, evt):
         load_original = self._ask_delete_chunks()

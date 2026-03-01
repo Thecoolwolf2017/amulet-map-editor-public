@@ -1,5 +1,5 @@
 import wx
-from typing import TYPE_CHECKING, Tuple, Union, Type
+from typing import TYPE_CHECKING, Tuple, Union, Type, Optional
 import logging
 import math
 import numpy
@@ -31,6 +31,9 @@ from amulet_map_editor.api.opengl.mesh.level import RenderLevel
 from amulet_map_editor.programs.edit.api.key_config import (
     KeybindGroup,
 )
+from amulet_map_editor.programs.edit.api.paste_location import (
+    resolve_paste_start_location,
+)
 from amulet_map_editor.programs.edit.api.operations import OperationSuccessful
 from amulet_map_editor.programs.edit.api.ui.nudge_button import NudgeButton
 from amulet_map_editor.programs.edit.api.ui.tool import DefaultBaseToolUI
@@ -42,9 +45,14 @@ from amulet_map_editor.programs.edit.api.behaviour.pointer_behaviour import (
 )
 from amulet_map_editor.programs.edit.api.events import (
     InputPressEvent,
+    InputHeldEvent,
     EVT_INPUT_PRESS,
+    EVT_INPUT_HELD,
 )
-from amulet_map_editor.programs.edit.api.key_config import ACT_BOX_CLICK
+from amulet_map_editor.programs.edit.api.key_config import (
+    ACT_BOX_CLICK,
+    get_cursor_key_offset,
+)
 
 if TYPE_CHECKING:
     from amulet_map_editor.programs.edit.api.canvas import EditCanvas
@@ -262,6 +270,8 @@ class PasteTool(wx.BoxSizer, DefaultBaseToolUI):
         self._cursor = PointerBehaviour(self.canvas)
         self._moving = False
         self._is_enabled = False
+        self._cursor_nudge_timeout = 10
+        self._last_clipboard_revision: Optional[int] = None
 
         self._paste_panel = SimpleScrollablePanel(canvas)
         self._paste_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -505,6 +515,7 @@ class PasteTool(wx.BoxSizer, DefaultBaseToolUI):
         self._cursor.bind_events()
         self.canvas.Bind(EVT_POINT_CHANGE, self._on_pointer_change)
         self.canvas.Bind(EVT_INPUT_PRESS, self._on_input_press)
+        self.canvas.Bind(EVT_INPUT_HELD, self._on_input_held)
 
     def enable(self):
         super().enable()
@@ -513,6 +524,7 @@ class PasteTool(wx.BoxSizer, DefaultBaseToolUI):
         self._moving = False
 
     def set_state(self, state):
+        clipboard_state = None
         if (
             isinstance(state, dict)
             and isinstance(state.get("structure"), BaseLevel)
@@ -520,19 +532,35 @@ class PasteTool(wx.BoxSizer, DefaultBaseToolUI):
         ):
             structure = state["structure"]
             dimension = state["dimension"]
+            clipboard_state = state.get("clipboard_state")
         elif structure_cache:
             structure, dimension = structure_cache.get_structure()
         else:
             wx.MessageBox("A structure needs to be copied before one can be pasted.")
             return
 
+        start_location, self._last_clipboard_revision = resolve_paste_start_location(
+            current_location=self._location.value,
+            clipboard_state=clipboard_state,
+            last_clipboard_revision=self._last_clipboard_revision,
+            target_world_path=getattr(self.canvas.world, "level_path", None),
+            target_dimension=self.canvas.dimension,
+            force_origin_for_cross_context=True,
+        )
+
         self._paste_panel.Enable()
         self._is_enabled = True
         self.canvas.renderer.fake_levels.clear()
         self.canvas.renderer.fake_levels.append(
-            structure, dimension, (0, 0, 0), (1, 1, 1), (0, 0, 0)
+            structure,
+            dimension,
+            start_location,
+            self._scale.value,
+            self._rotation_radians(),
         )
-        self._moving = True
+        self._location.value = start_location
+        self._update_transform()
+        self._moving = False
 
     def disable(self):
         super().disable()
@@ -670,6 +698,25 @@ class PasteTool(wx.BoxSizer, DefaultBaseToolUI):
                         self._scale.value,
                         self._rotation_radians(),
                     )
+        evt.Skip()
+
+    def _on_input_held(self, evt: InputHeldEvent):
+        if not self._is_enabled or self._moving:
+            self._cursor_nudge_timeout = 10
+            evt.Skip()
+            return
+
+        ox, oy, oz = get_cursor_key_offset(self.canvas.buttons.pressed_actions)
+        if any((ox, oy, oz)):
+            if self._cursor_nudge_timeout in (0, 10):
+                x, y, z = self.location
+                self.location = x + ox, y + oy, z + oz
+
+            if self._cursor_nudge_timeout:
+                self._cursor_nudge_timeout -= 1
+        else:
+            self._cursor_nudge_timeout = 10
+
         evt.Skip()
 
     def _paste_operation(self):

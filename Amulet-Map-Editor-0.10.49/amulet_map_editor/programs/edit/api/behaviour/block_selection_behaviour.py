@@ -8,6 +8,8 @@ from ..events import (
     InputPressEvent,
     InputReleaseEvent,
     EVT_INPUT_RELEASE,
+    InputHeldEvent,
+    EVT_INPUT_HELD,
     EVT_SELECTION_CHANGE,
 )
 from amulet.api.selection import SelectionGroup, SelectionBox
@@ -29,6 +31,7 @@ from ..key_config import (
     ACT_DECR_SELECT_DISTANCE,
     ACT_DESELECT_ALL_BOXES,
     ACT_DESELECT_BOX,
+    get_cursor_key_offset,
 )
 
 if TYPE_CHECKING:
@@ -98,6 +101,7 @@ class BlockSelectionBehaviour(PointerBehaviour):
         self._pointer_mask: NPArray2x3 = numpy.zeros((2, 3), dtype=bool)
         self._resizing = False  # is a box being resized
         self._pointer_distance2 = 0  # the pointer distance used when resizing
+        self._cursor_nudge_timeout = 10
 
     def _create_active_selection(self):
         """Create the active selection if it does not exist."""
@@ -116,6 +120,7 @@ class BlockSelectionBehaviour(PointerBehaviour):
     def bind_events(self):
         super().bind_events()
         self.canvas.Bind(EVT_INPUT_RELEASE, self._on_input_release)
+        self.canvas.Bind(EVT_INPUT_HELD, self._on_input_held)
         self.canvas.Bind(EVT_SELECTION_CHANGE, self._on_selection_change)
         self.canvas.Bind(wx.EVT_KEY_DOWN, self._on_key_press)
 
@@ -257,6 +262,29 @@ class BlockSelectionBehaviour(PointerBehaviour):
                 self._enable_inputs()
                 self._active_selection.locked = True
                 self.push_selection()
+        evt.Skip()
+
+    def _on_input_held(self, evt: InputHeldEvent):
+        if self._active_selection is None or self._editing:
+            self._cursor_nudge_timeout = 10
+            evt.Skip()
+            return
+
+        ox, oy, oz = get_cursor_key_offset(self.canvas.buttons.pressed_actions)
+        if any((ox, oy, oz)):
+            if self._cursor_nudge_timeout in (0, 10):
+                (x1, y1, z1), (x2, y2, z2) = self.active_block_positions
+                self.active_block_positions = (x1 + ox, y1 + oy, z1 + oz), (
+                    x2 + ox,
+                    y2 + oy,
+                    z2 + oz,
+                )
+
+            if self._cursor_nudge_timeout:
+                self._cursor_nudge_timeout -= 1
+        else:
+            self._cursor_nudge_timeout = 10
+
         evt.Skip()
 
     def _escape(self):

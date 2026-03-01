@@ -1,6 +1,6 @@
 import wx
 import wx.lib.scrolledpanel
-from typing import List
+from typing import List, Optional, Dict, Any
 
 import PyMCTranslate
 
@@ -16,11 +16,20 @@ from amulet_map_editor.api.wx.ui.block_select import BlockDefine, EVT_PROPERTIES
 
 
 class MultiBlockDefine(wx.lib.scrolledpanel.ScrolledPanel):
-    def __init__(self, parent, translation_manager, style=0):
+    def __init__(
+        self,
+        parent,
+        translation_manager,
+        style=0,
+        block_define_kwargs: Optional[Dict[str, Any]] = None,
+    ):
         super().__init__(parent, style=style)
         self.SetupScrolling()
 
         self._translation_manager = translation_manager
+        self._block_define_kwargs = {"orientation": wx.HORIZONTAL}
+        if block_define_kwargs is not None:
+            self._block_define_kwargs.update(block_define_kwargs)
 
         self._sizer = wx.BoxSizer(wx.VERTICAL)
 
@@ -30,7 +39,7 @@ class MultiBlockDefine(wx.lib.scrolledpanel.ScrolledPanel):
         self._block_picker_sizer = wx.BoxSizer(wx.VERTICAL)
 
         self._block_picker_sizer.Add(
-            _CollapsibleBlockDefine(self, translation_manager), 0, wx.TOP | wx.EXPAND, 5
+            self._create_block_picker(), 0, wx.TOP | wx.EXPAND, 5
         )
         self._sizer.Add(
             self._block_picker_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5
@@ -43,9 +52,19 @@ class MultiBlockDefine(wx.lib.scrolledpanel.ScrolledPanel):
         self._fix_enabled_buttons()
 
     def _add(self, evt):
+        self.add_block_define()
+
+    def _create_block_picker(self) -> "_CollapsibleBlockDefine":
+        return _CollapsibleBlockDefine(
+            self,
+            self._translation_manager,
+            block_define_kwargs=self._block_define_kwargs,
+        )
+
+    def add_block_define(self) -> BlockDefine:
         self.Freeze()
         self.collapse()
-        block_picker = _CollapsibleBlockDefine(self, self._translation_manager)
+        block_picker = self._create_block_picker()
         self._block_picker_sizer.Add(block_picker, 1, wx.TOP | wx.EXPAND, 5)
         self._block_picker_sizer.Layout()
         self._sizer.Layout()
@@ -53,6 +72,10 @@ class MultiBlockDefine(wx.lib.scrolledpanel.ScrolledPanel):
         self._fix_enabled_buttons()
         self.Refresh()
         self.Thaw()
+        return block_picker.block_define
+
+    def get_block_defines(self) -> List[BlockDefine]:
+        return [child.Window.block_define for child in self._block_picker_sizer.GetChildren()]
 
     def move_up(self, obj):
         sizer = self._block_picker_sizer
@@ -106,7 +129,13 @@ class MultiBlockDefine(wx.lib.scrolledpanel.ScrolledPanel):
 
 
 class _CollapsibleBlockDefine(wx.Panel):
-    def __init__(self, parent: MultiBlockDefine, translation_manager, collapsed=False):
+    def __init__(
+        self,
+        parent: MultiBlockDefine,
+        translation_manager,
+        collapsed=False,
+        block_define_kwargs: Optional[Dict[str, Any]] = None,
+    ):
         super().__init__(parent, style=wx.BORDER_SIMPLE)
 
         self.EXPAND = MAXIMIZE.bitmap(18, 18)
@@ -135,7 +164,9 @@ class _CollapsibleBlockDefine(wx.Panel):
         header_sizer.Add(self.delete_button, 0, wx.LEFT, 5)
         self.delete_button.Bind(wx.EVT_BUTTON, lambda evt: parent.delete(self))
 
-        self.block_define = BlockDefine(self, translation_manager, wx.HORIZONTAL)
+        self.block_define = BlockDefine(
+            self, translation_manager, **(block_define_kwargs or {})
+        )
         sizer.Add(self.block_define, 1, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 5)
         self.collapsed = collapsed
 

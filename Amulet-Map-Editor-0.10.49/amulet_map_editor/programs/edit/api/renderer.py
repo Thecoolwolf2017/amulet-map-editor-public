@@ -186,6 +186,15 @@ class Renderer(EditCanvasContainer):
         self.render_world.render_distance = render_distance
         # self.fake_levels.render_distance = render_distance  # TODO
 
+    @property
+    def chunk_cache_padding(self) -> int:
+        """Extra chunk radius kept in memory beyond render distance."""
+        return self.render_world.chunk_cache_padding
+
+    @chunk_cache_padding.setter
+    def chunk_cache_padding(self, chunk_cache_padding: int):
+        self.render_world.chunk_cache_padding = chunk_cache_padding
+
     def _on_camera_moved(self, evt: CameraMovedEvent):
         """The camera has moved. Update each class's camera state."""
         self.move_camera(evt.camera_location, evt.camera_rotation)

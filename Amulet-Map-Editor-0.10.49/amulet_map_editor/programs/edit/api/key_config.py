@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Set, Tuple
 from amulet_map_editor.api.wx.util.key_config import (
     KeybindContainer,
     KeybindGroup,
@@ -13,6 +13,12 @@ from amulet_map_editor.api.wx.util.key_config import (
     Control,
     Alt,
     Tab,
+    Left,
+    Right,
+    Up,
+    Down,
+    PageUp,
+    PageDown,
 )
 
 ACT_MOVE_UP = "ACT_MOVE_UP"
@@ -34,6 +40,12 @@ ACT_DESELECT_ALL_BOXES = "ACT_DESELECT_ALL_BOXES"
 ACT_DESELECT_BOX = "ACT_DESELECT_BOX"
 ACT_INSPECT_BLOCK = "ACT_INSPECT_BLOCK"
 ACT_CHANGE_PROJECTION = "ACT_CHANGE_PROJECTION"
+ACT_CURSOR_DECREASE_X = "ACT_CURSOR_DECREASE_X"
+ACT_CURSOR_INCREASE_X = "ACT_CURSOR_INCREASE_X"
+ACT_CURSOR_DECREASE_Y = "ACT_CURSOR_DECREASE_Y"
+ACT_CURSOR_INCREASE_Y = "ACT_CURSOR_INCREASE_Y"
+ACT_CURSOR_DECREASE_Z = "ACT_CURSOR_DECREASE_Z"
+ACT_CURSOR_INCREASE_Z = "ACT_CURSOR_INCREASE_Z"
 
 KeybindKeys: List[KeyActionType] = [
     ACT_MOVE_UP,
@@ -55,6 +67,12 @@ KeybindKeys: List[KeyActionType] = [
     ACT_DESELECT_BOX,
     ACT_INSPECT_BLOCK,
     ACT_CHANGE_PROJECTION,
+    ACT_CURSOR_DECREASE_X,
+    ACT_CURSOR_INCREASE_X,
+    ACT_CURSOR_DECREASE_Y,
+    ACT_CURSOR_INCREASE_Y,
+    ACT_CURSOR_DECREASE_Z,
+    ACT_CURSOR_INCREASE_Z,
 ]
 
 PresetKeybinds: KeybindContainer = {
@@ -78,6 +96,12 @@ PresetKeybinds: KeybindContainer = {
         ACT_DESELECT_BOX: ((Control,), "D"),
         ACT_INSPECT_BLOCK: ((), Alt),
         ACT_CHANGE_PROJECTION: ((), Tab),
+        ACT_CURSOR_DECREASE_X: ((), Left),
+        ACT_CURSOR_INCREASE_X: ((), Right),
+        ACT_CURSOR_DECREASE_Y: ((), PageDown),
+        ACT_CURSOR_INCREASE_Y: ((), PageUp),
+        ACT_CURSOR_DECREASE_Z: ((), Up),
+        ACT_CURSOR_INCREASE_Z: ((), Down),
     },
     "right_laptop": {
         ACT_MOVE_UP: ((), Space),
@@ -99,6 +123,12 @@ PresetKeybinds: KeybindContainer = {
         ACT_DESELECT_BOX: ((Control,), "D"),
         ACT_INSPECT_BLOCK: ((), Alt),
         ACT_CHANGE_PROJECTION: ((), Tab),
+        ACT_CURSOR_DECREASE_X: ((), Left),
+        ACT_CURSOR_INCREASE_X: ((), Right),
+        ACT_CURSOR_DECREASE_Y: ((), PageDown),
+        ACT_CURSOR_INCREASE_Y: ((), PageUp),
+        ACT_CURSOR_DECREASE_Z: ((), Up),
+        ACT_CURSOR_INCREASE_Z: ((), Down),
     },
     "left": {
         ACT_MOVE_UP: ((), Space),
@@ -120,6 +150,12 @@ PresetKeybinds: KeybindContainer = {
         ACT_DESELECT_BOX: ((Control,), "D"),
         ACT_INSPECT_BLOCK: ((), Alt),
         ACT_CHANGE_PROJECTION: ((), Tab),
+        ACT_CURSOR_DECREASE_X: ((), Left),
+        ACT_CURSOR_INCREASE_X: ((), Right),
+        ACT_CURSOR_DECREASE_Y: ((), PageDown),
+        ACT_CURSOR_INCREASE_Y: ((), PageUp),
+        ACT_CURSOR_DECREASE_Z: ((), Up),
+        ACT_CURSOR_INCREASE_Z: ((), Down),
     },
     "left_laptop": {
         ACT_MOVE_UP: ((), Space),
@@ -141,8 +177,42 @@ PresetKeybinds: KeybindContainer = {
         ACT_DESELECT_BOX: ((Control,), "D"),
         ACT_INSPECT_BLOCK: ((), Alt),
         ACT_CHANGE_PROJECTION: ((), Tab),
+        ACT_CURSOR_DECREASE_X: ((), Left),
+        ACT_CURSOR_INCREASE_X: ((), Right),
+        ACT_CURSOR_DECREASE_Y: ((), PageDown),
+        ACT_CURSOR_INCREASE_Y: ((), PageUp),
+        ACT_CURSOR_DECREASE_Z: ((), Up),
+        ACT_CURSOR_INCREASE_Z: ((), Down),
     },
 }
 
 DefaultKeybindGroupId: KeybindGroupIdType = "right"
 DefaultKeys: KeybindGroup = PresetKeybinds[DefaultKeybindGroupId]
+
+
+def merge_with_default_keybinds(keybinds: KeybindGroup) -> KeybindGroup:
+    """Return a keybind group with missing actions filled from defaults."""
+    merged = DefaultKeys.copy()
+    merged.update(keybinds)
+    return merged
+
+
+def get_cursor_key_offset(pressed_actions: Set[KeyActionType]) -> Tuple[int, int, int]:
+    """Get the world-axis cursor delta from held cursor movement actions.
+
+    Mapping:
+    - left/right: x axis
+    - page down/page up: y axis
+    - up/down: z axis
+    """
+
+    x = int(ACT_CURSOR_INCREASE_X in pressed_actions) - int(
+        ACT_CURSOR_DECREASE_X in pressed_actions
+    )
+    y = int(ACT_CURSOR_INCREASE_Y in pressed_actions) - int(
+        ACT_CURSOR_DECREASE_Y in pressed_actions
+    )
+    z = int(ACT_CURSOR_INCREASE_Z in pressed_actions) - int(
+        ACT_CURSOR_DECREASE_Z in pressed_actions
+    )
+    return x, y, z

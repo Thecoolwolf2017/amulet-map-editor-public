@@ -15,6 +15,7 @@ from amulet_map_editor import lang, CONFIG
 from amulet_map_editor.api.bedrock_open_safety import prepare_bedrock_world_for_open
 from amulet_map_editor.api.wx.ui import simple
 from amulet_map_editor.api.wx.ui.traceback_dialog import TracebackDialog
+from amulet_map_editor.api.wx.ui.open_world_routing import route_open_world_to_tab
 from amulet_map_editor.api.wx.util.ui_preferences import preserve_ui_preferences
 from amulet_map_editor.api.framework import app
 
@@ -218,7 +219,7 @@ class WorldUI(wx.Panel):
 
     def __init__(self, parent: wx.Window, world_format: "WorldFormatWrapper"):
         super().__init__(parent)
-        self.SetWindowStyle(wx.TAB_TRAVERSAL | wx.BORDER_RAISED)
+        self.SetWindowStyle(wx.TAB_TRAVERSAL | wx.BORDER_RAISED | wx.WANTS_CHARS)
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.SetSizer(sizer)
@@ -256,12 +257,47 @@ class WorldUIButton(WorldUI):
         self.path = world_format.path
         self.open_world_callback = open_world_callback
 
+        self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
+
+        self.Bind(wx.EVT_LEFT_DOWN, self._set_focus)
         self.Bind(wx.EVT_LEFT_UP, self._call_callback)
+        self.Bind(wx.EVT_KEY_DOWN, self._on_key_down)
+
+        self.img.Bind(wx.EVT_LEFT_DOWN, self._set_focus)
         self.img.Bind(wx.EVT_LEFT_UP, self._call_callback)
-        self.world_name.Bind(wx.EVT_LEFT_DOWN, self._call_callback)
+        self.world_name.Bind(wx.EVT_LEFT_DOWN, self._set_focus)
+        self.world_name.Bind(wx.EVT_LEFT_UP, self._call_callback)
+
+    def AcceptsFocusFromKeyboard(self) -> bool:
+        return True
+
+    def AcceptsFocus(self) -> bool:
+        return True
 
     def _call_callback(self, evt):
+        self.SetFocusIgnoringChildren()
         self.open_world_callback(self.path)
+
+    def _set_focus(self, evt):
+        self.SetFocusIgnoringChildren()
+        evt.Skip()
+
+    def _on_key_down(self, evt):
+        key = evt.GetKeyCode()
+        if key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER, wx.WXK_SPACE):
+            self.open_world_callback(self.path)
+            return
+
+        world_list = self.GetParent()
+        if isinstance(world_list, WorldList):
+            if key in (wx.WXK_UP, wx.WXK_NUMPAD_UP):
+                world_list.focus_relative(self, -1)
+                return
+            if key in (wx.WXK_DOWN, wx.WXK_NUMPAD_DOWN):
+                world_list.focus_relative(self, 1)
+                return
+
+        evt.Skip()
 
 
 class WorldList(wx.Panel):
@@ -299,6 +335,16 @@ class WorldList(wx.Panel):
                 log.info(f"Failed to display world button for {world_format.path} {e}")
 
         self.Layout()
+
+    def focus_relative(self, world_button: WorldUIButton, offset: int):
+        if not self.worlds:
+            return
+        try:
+            index = self.worlds.index(world_button)
+        except ValueError:
+            return
+        new_index = max(0, min(len(self.worlds) - 1, index + offset))
+        self.worlds[new_index].SetFocusIgnoringChildren()
 
 
 class CollapsibleWorldListUI(wx.CollapsiblePane):
@@ -392,6 +438,9 @@ class WorldSelectUI(wx.Panel):
 
         content = ScrollableWorldsUI(self, open_world_callback)
         sizer.Add(content, 1, wx.EXPAND)
+
+    def focus_default_control(self):
+        self.header_open_world.SetFocus()
 
     def _open_world(self, evt):
         dir_dialog = wx.DirDialog(
@@ -553,8 +602,8 @@ class WorldSelectAndRecentUI(wx.Panel):
 
         left_sizer = wx.BoxSizer(wx.VERTICAL)
         bottom_sizer.Add(left_sizer, 1, wx.EXPAND)
-        select_world = WorldSelectUI(self, self._update_recent)
-        left_sizer.Add(select_world, 1, wx.ALL | wx.EXPAND, 5)
+        self._select_world = WorldSelectUI(self, self._update_recent)
+        left_sizer.Add(self._select_world, 1, wx.ALL | wx.EXPAND, 5)
 
         right_sizer = wx.BoxSizer(wx.VERTICAL)
         bottom_sizer.Add(right_sizer, 1, wx.EXPAND)
@@ -566,6 +615,9 @@ class WorldSelectAndRecentUI(wx.Panel):
         # Rebuild triggers load_format calls which can conflict with LevelDB world open.
         RecentWorldUI._update_recent_worlds_config(path)
         self._open_world_callback(path)
+
+    def focus_default_control(self):
+        self._select_world.focus_default_control()
 
 
 @preserve_ui_preferences
@@ -601,7 +653,10 @@ class WorldSelectDialog(wx.Dialog):
 
 
 def open_level_from_dialog(parent: wx.Window):
-    """Show the open world dialog and open the selected world."""
+    """Show the open-world tab when possible, otherwise fall back to a dialog."""
+    if route_open_world_to_tab(parent):
+        return
+
     select_world = WorldSelectDialog(parent, app.open_level)
     select_world.ShowModal()
     select_world.Destroy()

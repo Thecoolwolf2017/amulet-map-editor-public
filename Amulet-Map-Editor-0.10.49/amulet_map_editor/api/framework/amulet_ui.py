@@ -1,7 +1,7 @@
 from __future__ import annotations
 import wx
 from wx.lib.agw import flatnotebook
-from typing import Dict, Union
+from typing import Dict, Union, Callable
 import traceback
 import logging
 import sys
@@ -10,7 +10,13 @@ from textwrap import dedent
 
 from amulet.api.errors import LoaderNoneMatched
 from amulet_map_editor.api.bedrock_open_safety import prepare_bedrock_world_for_open
-from amulet_map_editor.api.wx.ui.select_world import open_level_from_dialog
+from amulet_map_editor.api.cubic_chunks_support import (
+    is_probably_cubic_chunks_world,
+    cubic_chunks_not_supported_message,
+)
+from amulet_map_editor.api.wx.ui.select_world import (
+    WorldSelectAndRecentUI,
+)
 from amulet_map_editor.api.wx.ui.traceback_dialog import TracebackDialog
 from amulet_map_editor import __version__, lang
 from amulet_map_editor.api.framework.pages import WorldPageUI
@@ -145,6 +151,10 @@ class AmuletUI(wx.Frame):
         """Close a given level. You should use the method in the app."""
         self._level_notebook.close_level(path)
 
+    def show_open_world(self):
+        """Show the reusable world-select tab."""
+        self._level_notebook.show_open_world_tab()
+
     def create_menu(self):
         """
         Create the UI menu.
@@ -156,7 +166,7 @@ class AmuletUI(wx.Frame):
             "system", {}
         ).setdefault(
             lang.get("menu_bar.file.open_world"),
-            lambda evt: open_level_from_dialog(self),
+            lambda evt: self.show_open_world(),
         )
         # menu_dict.setdefault(lang.get('menu_bar.file.menu_name'), {}).setdefault('system', {}).setdefault('Create World', lambda: self.world.save())
         menu_dict.setdefault(lang.get("menu_bar.file.menu_name"), {}).setdefault(
@@ -200,6 +210,23 @@ class AmuletUI(wx.Frame):
         self.SetMenuBar(menu_bar)
 
 
+class OpenWorldPageUI(wx.Panel, BasePageUI):
+    def __init__(
+        self, parent: wx.Window, open_world_callback: Callable[[str], None]
+    ) -> None:
+        super().__init__(parent)
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        self.SetSizer(sizer)
+
+        self._world_select = WorldSelectAndRecentUI(self, open_world_callback)
+        sizer.Add(self._world_select, 1, wx.EXPAND)
+
+    def enable(self):
+        self.GetTopLevelParent().create_menu()
+        wx.CallAfter(self._world_select.focus_default_control)
+
+
 class AmuletLevelNotebook(flatnotebook.FlatNotebook):
     """A notebook to hold all world tabs."""
 
@@ -208,6 +235,7 @@ class AmuletLevelNotebook(flatnotebook.FlatNotebook):
 
     # Storage of open world tabs for easy lookup
     _open_worlds: Dict[str, CLOSEABLE_PAGE_TYPE]
+    _open_world_page: OpenWorldPageUI
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -217,16 +245,22 @@ class AmuletLevelNotebook(flatnotebook.FlatNotebook):
         self.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self._page_changed, self)
 
         self._main_menu = AmuletMainMenu(self)
+        self._open_world_page = OpenWorldPageUI(self, self.open_level)
         self._open_worlds = {}
 
     def init(self):
-        self._add_world_tab(self._main_menu, lang.get("main_menu.tab_name"))
+        self._add_world_tab(self._main_menu, lang.get("main_menu.tab_name"), True)
+        self._add_world_tab(self._open_world_page, lang.get("select_world.title"), False)
+
+    def show_open_world_tab(self):
+        self.SetSelection(self.GetPageIndex(self._open_world_page))
 
     def open_level(self, path: str):
         """Open a world panel add it to the notebook"""
         if path in self._open_worlds:
             self.SetSelection(self.GetPageIndex(self._open_worlds[path]))
         else:
+            likely_cubic_chunks = is_probably_cubic_chunks_world(path)
             try:
                 applied_actions = prepare_bedrock_world_for_open(path)
                 if applied_actions:
@@ -240,6 +274,10 @@ class AmuletLevelNotebook(flatnotebook.FlatNotebook):
 
             ok, error = _preflight_world_open(path)
             if not ok:
+                if likely_cubic_chunks:
+                    error = (
+                        f"{error}\n\n{cubic_chunks_not_supported_message(path)}"
+                    ).strip()
                 log.error(f"World preflight failed for {path}\n{error}")
                 wx.MessageBox(
                     "Amulet could not safely open this world.\n\n"
@@ -255,7 +293,14 @@ class AmuletLevelNotebook(flatnotebook.FlatNotebook):
                 world = WorldPageUI(self, path)
             except LoaderNoneMatched as e:
                 log.error(f"Could not find a loader for this world.\n{e}")
-                wx.MessageBox(f"{lang.get('select_world.no_loader_found')}\n{e}")
+                if likely_cubic_chunks:
+                    wx.MessageBox(
+                        cubic_chunks_not_supported_message(path),
+                        "Cubic Chunks Not Supported",
+                        style=wx.OK | wx.ICON_ERROR,
+                    )
+                else:
+                    wx.MessageBox(f"{lang.get('select_world.no_loader_found')}\n{e}")
             except Exception as e:
                 log.error(lang.get("select_world.loading_world_failed"), exc_info=True)
                 dialog = TracebackDialog(
@@ -270,9 +315,9 @@ class AmuletLevelNotebook(flatnotebook.FlatNotebook):
                 self._open_worlds[path] = world
                 self._add_world_tab(world, world.world_name)
 
-    def _add_world_tab(self, page: BasePageUI, obj_name: str):
+    def _add_world_tab(self, page: BasePageUI, obj_name: str, select: bool = True):
         """Add a tab and enable it."""
-        self.AddPage(page, obj_name, True)
+        self.AddPage(page, obj_name, select)
 
     def close_level(self, path: str):
         """Close a given world and remove it from the notebook"""
@@ -285,15 +330,18 @@ class AmuletLevelNotebook(flatnotebook.FlatNotebook):
 
     def _on_page_closing(self, evt: flatnotebook.EVT_FLATNOTEBOOK_PAGE_CLOSING):
         """Handle the page closing."""
-        page: CLOSEABLE_PAGE_TYPE = self.GetPage(evt.GetSelection())
-        if page is not self._main_menu:
-            if page.can_disable() and page.can_close():
-                path = page.path
-                page.disable()
-                page.close()
-                del self._open_worlds[path]
-            else:
-                evt.Veto()
+        page = self.GetPage(evt.GetSelection())
+        if page in (self._main_menu, self._open_world_page):
+            evt.Veto()
+            return
+
+        if page.can_disable() and page.can_close():
+            path = page.path
+            page.disable()
+            page.close()
+            del self._open_worlds[path]
+        else:
+            evt.Veto()
 
     def _page_changing(self, evt: wx.BookCtrlEvent):
         old_selection_index = evt.GetOldSelection()
@@ -313,6 +361,8 @@ class AmuletLevelNotebook(flatnotebook.FlatNotebook):
 
             if self.GetCurrentPage() is self._main_menu:
                 self.SetAGWWindowStyleFlag(NOTEBOOK_MENU_STYLE)
+            elif self.GetCurrentPage() is self._open_world_page:
+                self.SetAGWWindowStyleFlag(NOTEBOOK_MENU_STYLE)
             else:
                 self.SetAGWWindowStyleFlag(NOTEBOOK_STYLE)
 
@@ -322,7 +372,7 @@ class AmuletLevelNotebook(flatnotebook.FlatNotebook):
     def on_app_close(self, evt: wx.CloseEvent):
         for path, page in list(self._open_worlds.items()):
             self.close_level(path)
-        if self.GetPageCount() > 1:
+        if self._open_worlds:
             wx.MessageBox(lang.get("app.world_still_used"))
         else:
             evt.Skip()

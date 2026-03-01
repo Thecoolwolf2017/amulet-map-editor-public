@@ -57,6 +57,7 @@ class RenderLevel(OpenGLResourcePackManager, Drawable, ThreadedObject, ContextMa
         self._camera_rotation: CameraRotationType = (0, 90)
         self._dimension: Dimension = level.dimensions[0]
         self._render_distance = 5
+        self._chunk_cache_padding = 5
         self._garbage_distance = 10
         self._draw_box = draw_box
         self._draw_floor = draw_floor
@@ -73,6 +74,10 @@ class RenderLevel(OpenGLResourcePackManager, Drawable, ThreadedObject, ContextMa
         )
         self._chunk_rebuilds = self._rebuild_generator()
         self._rebuild_time = 0
+        self._update_garbage_distance()
+
+    def _update_garbage_distance(self):
+        self._garbage_distance = self._render_distance + self._chunk_cache_padding
 
     @property
     def level(self) -> "BaseLevel":
@@ -233,8 +238,19 @@ class RenderLevel(OpenGLResourcePackManager, Drawable, ThreadedObject, ContextMa
     def render_distance(self, val: int):
         assert isinstance(val, int), "Render distance must be an int"
         self._render_distance = val
-        self._garbage_distance = val + 5
+        self._update_garbage_distance()
         self._needs_rebuild = True
+
+    @property
+    def chunk_cache_padding(self) -> int:
+        """Extra chunk radius kept in memory beyond render_distance."""
+        return self._chunk_cache_padding
+
+    @chunk_cache_padding.setter
+    def chunk_cache_padding(self, val: int):
+        assert isinstance(val, int), "Chunk cache padding must be an int"
+        self._chunk_cache_padding = max(0, val)
+        self._update_garbage_distance()
 
     @property
     def draw_box(self):
