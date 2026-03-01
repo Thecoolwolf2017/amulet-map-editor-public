@@ -73,6 +73,14 @@ def _resolve_extracted_mcworld_path(extract_dir: str) -> str:
     return extract_dir
 
 
+def _is_valid_mcworld_archive(path: str) -> bool:
+    """Return True if the selected .mcworld file is a valid zip archive."""
+    try:
+        return zipfile.is_zipfile(path)
+    except OSError:
+        return False
+
+
 # Windows 	%APPDATA%\.minecraft
 # macOS 	~/Library/Application Support/minecraft
 # Linux 	~/.minecraft
@@ -478,6 +486,15 @@ class WorldSelectUI(wx.Panel):
         finally:
             mcworld_dialog.Destroy()
 
+        if not _is_valid_mcworld_archive(mcworld_path):
+            wx.MessageBox(
+                "The selected .mcworld file is not a valid archive. "
+                "Please choose a valid Bedrock .mcworld export file.",
+                "Invalid .mcworld file",
+                wx.OK | wx.ICON_ERROR,
+            )
+            return
+
         dir_dialog = wx.DirDialog(
             None,
             lang.get("select_world.extract_mcworld_dialogue"),
@@ -504,6 +521,14 @@ class WorldSelectUI(wx.Panel):
             with zipfile.ZipFile(mcworld_path) as archive:
                 archive.extractall(extract_dir)
             _make_tree_writable(extract_dir)
+        except zipfile.BadZipFile:
+            del busy_msg
+            wx.MessageBox(
+                "The selected .mcworld file is corrupted or not a zip archive.",
+                "Invalid .mcworld file",
+                wx.OK | wx.ICON_ERROR,
+            )
+            return
         except Exception as e:
             del busy_msg
             dialog = TracebackDialog(
