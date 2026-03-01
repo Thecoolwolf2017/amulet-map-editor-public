@@ -6,7 +6,7 @@ import logging
 import time
 
 from amulet_map_editor.api import config
-from amulet_map_editor import __version__
+from amulet_map_editor import __version__, enable_update_check
 from .warning_dialog import WarningDialog
 from .licence_dialog import LicenceDialog
 
@@ -55,7 +55,7 @@ class AmuletApp(wx.App):
                 meta_config["do_not_show_warning_dialog"] = True
                 config.put("amulet_meta", meta_config)
 
-        if update_check:
+        if update_check and enable_update_check:
             def _on_update_check(evt):
                 new_version = evt.GetVersion()
                 latest_meta_config = config.get("amulet_meta", {})

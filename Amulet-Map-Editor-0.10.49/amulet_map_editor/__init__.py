@@ -2,6 +2,9 @@ import os
 import platformdirs
 
 experimental_bedrock_resources = False
+# This fork ships custom release artifacts and should not prompt against
+# upstream Amulet-Team release feed by default.
+enable_update_check = False
 
 # Import leveldb before any wx imports to avoid a native crash when opening
 # Bedrock worlds on Windows in some environments.
