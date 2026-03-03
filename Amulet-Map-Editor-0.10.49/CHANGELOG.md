@@ -7,7 +7,7 @@
 - Live lasso selection preview while dragging, including additive lasso behavior with `Ctrl`.
 - Export remap table support for custom namespaces/blocks via `custom_block_export_remap.json`.
 - Automatic pre-export namespace discovery that appends missing custom namespaces to the local remap table.
-- Export remap preview report in the export UI (`Preview Remap`) with chunk/block impact totals.
+- Export remap preview report in the export UI (`Preview Remap`) with a color-coded remap table and chunk/block impact totals.
 - Export remap wizard in the export UI for editing custom block remaps without leaving the app.
 - Lasso selection unit tests (`tests/test_lasso_selection.py`).
 

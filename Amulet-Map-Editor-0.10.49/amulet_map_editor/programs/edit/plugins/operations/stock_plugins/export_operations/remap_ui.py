@@ -28,34 +28,161 @@ def _launch_path(path: str) -> bool:
         return False
 
 
-def _format_preview_text(preview: ExportRemapPreview, max_entries: int = 12) -> str:
-    unchanged_blocks = preview.custom_block_total - preview.remapped_block_total
-    lines = [
-        f"Chunks scanned: {preview.scanned_chunks}/{preview.total_chunks}",
-        f"Chunk read failures: {preview.failed_chunks}",
-        f"Custom namespaces found: {preview.custom_namespace_count}",
-        f"Custom block ids found: {preview.custom_block_count}",
-        f"Custom placed blocks in selection: {preview.custom_block_total:,}",
-        f"Blocks that will be remapped on export: {preview.remapped_block_total:,}",
-        f"Blocks kept unchanged: {unchanged_blocks:,}",
-        f"Remap enabled: {'Yes' if preview.remap_enabled else 'No'}",
-        f"Auto remap for new custom blocks: {'Yes' if preview.auto_block_remap else 'No'}",
-        f"Remap table path: {preview.rules_path}",
-    ]
-    if preview.entries:
-        lines.append("")
-        lines.append("Top remap entries:")
-        for entry in preview.entries[:max_entries]:
-            lines.append(
-                f"- {entry.block_count:,}x {entry.source_block} -> {entry.replacement_block}"
+class _RemapPreviewDialog(wx.Dialog):
+    def __init__(
+        self,
+        parent: wx.Window,
+        preview: ExportRemapPreview,
+        allow_export: bool = False,
+    ):
+        super().__init__(
+            parent,
+            title="Export Remap Preview",
+            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+        )
+        self._preview = preview
+        self._allow_export = allow_export
+        self._wizard_result_id = int(wx.NewIdRef())
+
+        root = wx.BoxSizer(wx.VERTICAL)
+        self.SetSizer(root)
+
+        unchanged_blocks = preview.custom_block_total - preview.remapped_block_total
+        summary_grid = wx.FlexGridSizer(cols=2, hgap=10, vgap=4)
+        summary_grid.AddGrowableCol(1, 1)
+        summary_rows = (
+            ("Chunks scanned:", f"{preview.scanned_chunks}/{preview.total_chunks}"),
+            ("Chunk read failures:", str(preview.failed_chunks)),
+            ("Custom namespaces found:", str(preview.custom_namespace_count)),
+            ("Custom block ids found:", str(preview.custom_block_count)),
+            ("Custom placed blocks:", f"{preview.custom_block_total:,}"),
+            ("Will be remapped:", f"{preview.remapped_block_total:,}"),
+            ("Kept unchanged:", f"{unchanged_blocks:,}"),
+            ("Remap enabled:", "Yes" if preview.remap_enabled else "No"),
+            (
+                "Auto remap new custom blocks:",
+                "Yes" if preview.auto_block_remap else "No",
+            ),
+        )
+        for label, value in summary_rows:
+            summary_grid.Add(wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
+            summary_grid.Add(wx.StaticText(self, label=value), 0, wx.ALIGN_CENTER_VERTICAL)
+        root.Add(summary_grid, 0, wx.ALL | wx.EXPAND, 8)
+
+        self._show_changed_only = wx.CheckBox(
+            self, label="Show only entries that remap to a different block"
+        )
+        self._show_changed_only.Bind(wx.EVT_CHECKBOX, self._refresh_entry_list)
+        root.Add(self._show_changed_only, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+
+        self._entry_list = wx.ListCtrl(
+            self, style=wx.LC_REPORT | wx.BORDER_THEME | wx.LC_HRULES | wx.LC_VRULES
+        )
+        self._entry_list.InsertColumn(0, "Custom Block")
+        self._entry_list.InsertColumn(1, "Export As")
+        self._entry_list.InsertColumn(2, "Count", wx.LIST_FORMAT_RIGHT)
+        self._entry_list.InsertColumn(3, "Action")
+        root.Add(self._entry_list, 1, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 8)
+
+        root.Add(
+            wx.StaticText(
+                self,
+                label=(
+                    "Legend: green rows are remapped, gray rows are kept unchanged."
+                ),
+            ),
+            0,
+            wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND,
+            8,
+        )
+        root.Add(
+            wx.StaticText(self, label=f"Remap table: {preview.rules_path}"),
+            0,
+            wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND,
+            8,
+        )
+
+        button_row = wx.BoxSizer(wx.HORIZONTAL)
+        open_button = wx.Button(self, label="Open JSON File")
+        open_button.Bind(wx.EVT_BUTTON, self._open_rules_file)
+        button_row.Add(open_button, 0, wx.ALL, 5)
+        button_row.AddStretchSpacer()
+
+        if allow_export:
+            export_button = wx.Button(self, wx.ID_YES, "Export")
+            export_button.SetDefault()
+            button_row.Add(export_button, 0, wx.ALL, 5)
+            wizard_button = wx.Button(self, wx.ID_NO, "Remap Wizard")
+            button_row.Add(wizard_button, 0, wx.ALL, 5)
+            cancel_button = wx.Button(self, wx.ID_CANCEL, "Cancel")
+            button_row.Add(cancel_button, 0, wx.ALL, 5)
+        else:
+            wizard_button = wx.Button(
+                self, self._wizard_result_id, "Open Remap Wizard"
             )
-        hidden_entries = len(preview.entries) - max_entries
-        if hidden_entries > 0:
-            lines.append(f"... and {hidden_entries} more entries.")
-    else:
-        lines.append("")
-        lines.append("No custom blocks were found in the current selection.")
-    return "\n".join(lines)
+            wizard_button.Bind(
+                wx.EVT_BUTTON, lambda _evt: self.EndModal(self._wizard_result_id)
+            )
+            button_row.Add(wizard_button, 0, wx.ALL, 5)
+            close_button = wx.Button(self, wx.ID_CLOSE, "Close")
+            close_button.Bind(wx.EVT_BUTTON, lambda _evt: self.EndModal(wx.ID_CLOSE))
+            close_button.SetDefault()
+            button_row.Add(close_button, 0, wx.ALL, 5)
+
+        root.Add(button_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 4)
+
+        self._refresh_entry_list()
+        self.SetMinSize((900, 600))
+        self.SetSize((980, 680))
+        self.CentreOnParent()
+
+    @property
+    def wizard_result_id(self) -> int:
+        return self._wizard_result_id
+
+    def _refresh_entry_list(self, _evt=None):
+        self._entry_list.DeleteAllItems()
+        show_changed_only = self._show_changed_only.GetValue()
+
+        visible_rows = 0
+        for entry in self._preview.entries:
+            remapped = entry.source_block != entry.replacement_block
+            if show_changed_only and not remapped:
+                continue
+
+            row = self._entry_list.InsertItem(
+                self._entry_list.GetItemCount(), entry.source_block
+            )
+            self._entry_list.SetItem(row, 1, entry.replacement_block)
+            self._entry_list.SetItem(row, 2, f"{entry.block_count:,}")
+            self._entry_list.SetItem(row, 3, "Remap" if remapped else "Keep")
+            self._entry_list.SetItemTextColour(
+                row, wx.Colour(20, 120, 20) if remapped else wx.Colour(115, 115, 115)
+            )
+            visible_rows += 1
+
+        if visible_rows == 0:
+            row = self._entry_list.InsertItem(
+                0,
+                "No remap entries to display."
+                if show_changed_only
+                else "No custom block entries found in this selection.",
+            )
+            self._entry_list.SetItem(row, 3, "Info")
+            self._entry_list.SetItemTextColour(row, wx.Colour(115, 115, 115))
+
+        self._entry_list.SetColumnWidth(0, 330)
+        self._entry_list.SetColumnWidth(1, 330)
+        self._entry_list.SetColumnWidth(2, 120)
+        self._entry_list.SetColumnWidth(3, 110)
+
+    def _open_rules_file(self, _evt):
+        if not _launch_path(self._preview.rules_path):
+            wx.MessageBox(
+                f"Could not open file:\n{self._preview.rules_path}",
+                "Open Failed",
+                wx.OK | wx.ICON_WARNING,
+            )
 
 
 class _RemapWizardDialog(wx.Dialog):
@@ -191,8 +318,13 @@ class ExportRemapWorkflowMixin:
 
     def _preview_remap_button_clicked(self, _evt):
         rules, preview = self._build_preview()
-        text = _format_preview_text(preview)
-        wx.MessageBox(text, "Export Remap Preview", wx.OK | wx.ICON_INFORMATION)
+        dialog = _RemapPreviewDialog(self, preview, allow_export=False)
+        try:
+            result = dialog.ShowModal()
+            if result == dialog.wizard_result_id:
+                self._open_remap_wizard()
+        finally:
+            dialog.Destroy()
         self._prepared_remap_rules = rules
 
     def _remap_wizard_button_clicked(self, _evt):
@@ -223,21 +355,11 @@ class ExportRemapWorkflowMixin:
             return True
 
         while True:
-            message = (
-                _format_preview_text(preview)
-                + "\n\nExport with these mappings?\n"
-                + "Yes = Export, No = Open Remap Wizard, Cancel = Stop"
-            )
-            dialog = wx.MessageDialog(
-                self,
-                message,
-                "Confirm Export Remap",
-                style=wx.YES_NO | wx.CANCEL | wx.CANCEL_DEFAULT | wx.ICON_QUESTION,
-            )
-            if hasattr(dialog, "SetYesNoCancelLabels"):
-                dialog.SetYesNoCancelLabels("Export", "Remap Wizard", "Cancel")
-            result = dialog.ShowModal()
-            dialog.Destroy()
+            dialog = _RemapPreviewDialog(self, preview, allow_export=True)
+            try:
+                result = dialog.ShowModal()
+            finally:
+                dialog.Destroy()
 
             if result == wx.ID_YES:
                 self._prepared_remap_rules = rules
