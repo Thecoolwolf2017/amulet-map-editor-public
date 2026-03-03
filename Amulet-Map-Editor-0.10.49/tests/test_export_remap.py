@@ -60,8 +60,8 @@ class ExportRemapTests(unittest.TestCase):
         else:
             os.environ["DATA_DIR"] = self._old_data_dir
 
-    def test_auto_added_namespace_defaults_to_keep(self):
-        chunk, _custom_count = _make_chunk_with_custom_block()
+    def test_auto_added_namespace_and_block_remap(self):
+        chunk, custom_count = _make_chunk_with_custom_block()
         world = _World({(0, 0): chunk})
         selection = _Selection([(0, 0)])
 
@@ -74,12 +74,14 @@ class ExportRemapTests(unittest.TestCase):
         with open(table_path, "r", encoding="utf-8") as f:
             table = json.load(f)
 
+        self.assertEqual(table.get("auto_block_remap"), True)
         self.assertEqual(table["namespace_remap"].get("myaddon"), "__keep__")
-        self.assertEqual(replaced, 0)
+        self.assertIn("myaddon:machine", table.get("block_remap", {}))
+        self.assertEqual(replaced, custom_count)
 
         ids = numpy.unique(out_chunk.blocks.get_sub_chunk(0))
         names = {out_chunk.block_palette[int(i)].namespaced_name for i in ids}
-        self.assertIn("myaddon:machine", names)
+        self.assertNotIn("myaddon:machine", names)
 
     def test_explicit_namespace_mapping_applies(self):
         table_path = os.path.join(self._tmp.name, "custom_block_export_remap.json")

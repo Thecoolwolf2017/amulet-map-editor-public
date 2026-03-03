@@ -50,11 +50,13 @@ _LEGACY_BLOCK_REMAP = {
 _DEFAULT_REMAP_TABLE = {
     "schema_version": _SCHEMA_VERSION,
     "enabled": True,
+    "auto_block_remap": True,
     "namespace_remap": {},
     "block_remap": {},
     "notes": [
         "This table is used only during export.",
         "New custom namespaces are auto-added as '__keep__'.",
+        "If auto_block_remap is true, missing custom blocks get auto-mapped to vanilla guesses.",
         "Keys in block_remap are exact namespace:block ids.",
         "namespace_remap applies when there is no exact block_remap match.",
         "Set values to vanilla blockstates to force fallback mappings.",
@@ -167,7 +169,12 @@ def _load_raw_rules_data(path: str) -> dict:
             data = json.load(f)
         if not isinstance(data, dict):
             raise ValueError("Rules file must contain a JSON object.")
-        return _migrate_legacy_rules(path, data)
+        data = _migrate_legacy_rules(path, data)
+        if "auto_block_remap" not in data:
+            data["auto_block_remap"] = True
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, sort_keys=True)
+        return data
     except Exception:
         log.exception("Could not parse export block remap table at %s", path)
         return deepcopy(_DEFAULT_REMAP_TABLE)
@@ -190,13 +197,145 @@ def _used_palette_ids(chunk: Chunk) -> Set[int]:
 
 def _collect_chunk_custom_namespaces(chunk: Chunk) -> Set[str]:
     namespaces: Set[str] = set()
+    for block in _collect_chunk_custom_blocks(chunk):
+        namespace = _normalise_key(block.namespace)
+        if namespace:
+            namespaces.add(namespace)
+    return namespaces
+
+
+def _collect_chunk_custom_blocks(chunk: Chunk) -> Set[Block]:
+    blocks: Set[Block] = set()
     for palette_id in _used_palette_ids(chunk):
         block = chunk.block_palette[palette_id]
         for block_part in _iter_blocks(block):
             namespace = _normalise_key(block_part.namespace)
-            if namespace and namespace not in {"minecraft", "universal"}:
-                namespaces.add(namespace)
-    return namespaces
+            if namespace and namespace not in {
+                "minecraft",
+                "universal",
+                "universal_minecraft",
+            }:
+                blocks.add(block_part.base_block)
+    return blocks
+
+
+def _guess_vanilla_blockstate_for_custom(block: Block) -> str:
+    name = _normalise_key(block.base_name)
+
+    ore_map = [
+        ("diamond", "minecraft:diamond_ore"),
+        ("emerald", "minecraft:emerald_ore"),
+        ("gold", "minecraft:gold_ore"),
+        ("iron", "minecraft:iron_ore"),
+        ("copper", "minecraft:copper_ore"),
+        ("coal", "minecraft:coal_ore"),
+        ("redstone", "minecraft:redstone_ore"),
+        ("lapis", "minecraft:lapis_ore"),
+        ("tin", "minecraft:iron_ore"),
+        ("aluminum", "minecraft:iron_ore"),
+        ("alluminum", "minecraft:iron_ore"),
+        ("stardust", "minecraft:diamond_ore"),
+    ]
+    if "ore" in name:
+        for keyword, fallback in ore_map:
+            if keyword in name:
+                return fallback
+        return "minecraft:iron_ore"
+
+    keyword_map = [
+        ("carrot", "minecraft:carrots"),
+        ("potato", "minecraft:potatoes"),
+        ("crop", "minecraft:wheat"),
+        ("berry", "minecraft:sweet_berry_bush"),
+        ("anenome", "minecraft:dandelion"),
+        ("lilax", "minecraft:lilac"),
+        ("flower", "minecraft:dandelion"),
+        ("barrel", "minecraft:barrel"),
+        ("crate", "minecraft:barrel"),
+        ("table", "minecraft:crafting_table"),
+        ("leaves", "minecraft:oak_leaves"),
+        ("log", "minecraft:oak_log"),
+        ("plank", "minecraft:oak_planks"),
+        ("wood", "minecraft:oak_planks"),
+        ("grass", "minecraft:grass_block"),
+        ("dirt", "minecraft:dirt"),
+        ("stone", "minecraft:stone"),
+        ("gravel", "minecraft:gravel"),
+        ("sand", "minecraft:sand"),
+        ("glass", "minecraft:glass"),
+        ("torch", "minecraft:torch"),
+        ("lamp", "minecraft:sea_lantern"),
+        ("light", "minecraft:sea_lantern"),
+        ("door", "minecraft:oak_door"),
+        ("trapdoor", "minecraft:oak_trapdoor"),
+        ("slab", "minecraft:stone_slab"),
+        ("stair", "minecraft:oak_stairs"),
+        ("sofa", "minecraft:oak_stairs"),
+        ("chair", "minecraft:oak_stairs"),
+        ("fence", "minecraft:oak_fence"),
+        ("wall", "minecraft:stone_brick_wall"),
+        ("lever", "minecraft:lever"),
+        ("hopper", "minecraft:hopper"),
+        ("chest", "minecraft:chest"),
+        ("wireless", "minecraft:redstone_block"),
+        ("receiver", "minecraft:redstone_block"),
+        ("transmitter", "minecraft:redstone_block"),
+        ("camera", "minecraft:redstone_block"),
+        ("laser", "minecraft:redstone_block"),
+        ("turret", "minecraft:redstone_block"),
+        ("duct", "minecraft:redstone_block"),
+        ("cable", "minecraft:redstone_block"),
+        ("redstone", "minecraft:redstone_block"),
+        ("elevator", "minecraft:iron_block"),
+        ("waystone", "minecraft:lodestone"),
+    ]
+
+    for keyword, fallback in keyword_map:
+        if keyword in name:
+            return fallback
+
+    return _DEFAULT_NAMESPACE_FALLBACK
+
+
+def _append_missing_block_remaps(path: str, blocks: Iterable[Block]) -> int:
+    data = _load_raw_rules_data(path)
+    block_remap = data.get("block_remap")
+    if not isinstance(block_remap, dict):
+        block_remap = {}
+
+    namespace_remap = data.get("namespace_remap")
+    if not isinstance(namespace_remap, dict):
+        namespace_remap = {}
+
+    explicit_namespace_remap = {
+        _normalise_key(ns)
+        for ns, value in namespace_remap.items()
+        if isinstance(value, str)
+        and _normalise_key(value) not in {"", _KEEP_SENTINEL}
+    }
+
+    existing = {_normalise_key(key) for key in block_remap.keys()}
+    added = 0
+    for block in sorted(
+        set(blocks),
+        key=lambda b: (_normalise_key(b.namespace), _normalise_key(b.base_name)),
+    ):
+        block_id = _normalise_key(block.namespaced_name)
+        if block_id in existing:
+            continue
+        if _normalise_key(block.namespace) in explicit_namespace_remap:
+            continue
+        block_remap[block.namespaced_name] = _guess_vanilla_blockstate_for_custom(
+            block
+        )
+        existing.add(block_id)
+        added += 1
+
+    if added:
+        data["block_remap"] = block_remap
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, sort_keys=True)
+    return added
 
 
 def _append_missing_namespaces(path: str, namespaces: Iterable[str]) -> int:
@@ -226,20 +365,30 @@ def build_export_remap_table_for_selection(
     """Ensure the remap table includes each custom namespace found in the selection."""
     rules = load_export_block_remap_rules()
     custom_namespaces: Set[str] = set()
+    custom_blocks: Set[Block] = set()
 
     for cx, cz in selection.chunk_locations():
         try:
             chunk = world.get_chunk(cx, cz, dimension)
             custom_namespaces.update(_collect_chunk_custom_namespaces(chunk))
+            custom_blocks.update(_collect_chunk_custom_blocks(chunk))
         except Exception:
             # Ignore unreadable chunks and keep export moving.
             continue
 
-    added = _append_missing_namespaces(rules.path, custom_namespaces)
-    if added:
+    added_namespaces = _append_missing_namespaces(rules.path, custom_namespaces)
+
+    raw_data = _load_raw_rules_data(rules.path)
+    auto_block_remap = bool(raw_data.get("auto_block_remap", True))
+    added_block_remaps = 0
+    if auto_block_remap:
+        added_block_remaps = _append_missing_block_remaps(rules.path, custom_blocks)
+
+    if added_namespaces or added_block_remaps:
         log.info(
-            "Added %s custom namespace remap entries to export table: %s",
-            added,
+            "Updated export remap table (+%s namespaces, +%s block mappings): %s",
+            added_namespaces,
+            added_block_remaps,
             rules.path,
         )
         rules = load_export_block_remap_rules()
