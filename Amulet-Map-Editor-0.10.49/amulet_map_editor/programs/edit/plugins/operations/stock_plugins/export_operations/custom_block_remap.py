@@ -3,8 +3,9 @@
 import json
 import logging
 import os
+from copy import deepcopy
 from dataclasses import dataclass
-from typing import Dict, Iterable, Set, Tuple, TYPE_CHECKING
+from typing import Dict, Iterable, Optional, Set, Tuple, TYPE_CHECKING
 
 import numpy
 
@@ -19,36 +20,45 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 _DEFAULT_NAMESPACE_FALLBACK = "minecraft:stone"
+_KEEP_SENTINEL = "__keep__"
+_SCHEMA_VERSION = 2
+
+_LEGACY_NAMESPACE_REMAP = {
+    "better_on_bedrock": "minecraft:stone",
+    "ecbl_bs": "minecraft:iron_block",
+    "f": "minecraft:white_wool",
+    "ftb": "minecraft:oak_planks",
+    "ftb_tc": "minecraft:stone",
+    "vtng_rt": "minecraft:redstone_block",
+}
+
+_LEGACY_BLOCK_REMAP = {
+    "better_on_bedrock:alluminum_ore": "minecraft:iron_ore",
+    "better_on_bedrock:anenome": "minecraft:dandelion",
+    "better_on_bedrock:barley_crop": "minecraft:wheat",
+    "better_on_bedrock:blueberry_block": "minecraft:sweet_berry_bush",
+    "better_on_bedrock:cabbage_crop": "minecraft:wheat",
+    "better_on_bedrock:eggplant_crop": "minecraft:wheat",
+    "better_on_bedrock:lilax_heads": "minecraft:lilac",
+    "better_on_bedrock:stardust_ore": "minecraft:diamond_ore",
+    "better_on_bedrock:tin_ore": "minecraft:iron_ore",
+    "better_on_bedrock:tomato_crop": "minecraft:wheat",
+    "better_on_bedrock:wild_carrot": "minecraft:carrots",
+    "ftb_tc:tin_ore": "minecraft:iron_ore",
+}
 
 _DEFAULT_REMAP_TABLE = {
+    "schema_version": _SCHEMA_VERSION,
     "enabled": True,
-    "namespace_remap": {
-        "better_on_bedrock": "minecraft:stone",
-        "ecbl_bs": "minecraft:iron_block",
-        "f": "minecraft:white_wool",
-        "ftb": "minecraft:oak_planks",
-        "ftb_tc": "minecraft:stone",
-        "vtng_rt": "minecraft:redstone_block",
-    },
-    "block_remap": {
-        "better_on_bedrock:alluminum_ore": "minecraft:iron_ore",
-        "better_on_bedrock:anenome": "minecraft:dandelion",
-        "better_on_bedrock:barley_crop": "minecraft:wheat",
-        "better_on_bedrock:blueberry_block": "minecraft:sweet_berry_bush",
-        "better_on_bedrock:cabbage_crop": "minecraft:wheat",
-        "better_on_bedrock:eggplant_crop": "minecraft:wheat",
-        "better_on_bedrock:lilax_heads": "minecraft:lilac",
-        "better_on_bedrock:stardust_ore": "minecraft:diamond_ore",
-        "better_on_bedrock:tin_ore": "minecraft:iron_ore",
-        "better_on_bedrock:tomato_crop": "minecraft:wheat",
-        "better_on_bedrock:wild_carrot": "minecraft:carrots",
-        "ftb_tc:tin_ore": "minecraft:iron_ore",
-    },
+    "namespace_remap": {},
+    "block_remap": {},
     "notes": [
         "This table is used only during export.",
+        "New custom namespaces are auto-added as '__keep__'.",
         "Keys in block_remap are exact namespace:block ids.",
         "namespace_remap applies when there is no exact block_remap match.",
-        "Values are fallback vanilla blockstates, eg minecraft:stone or minecraft:oak_planks.",
+        "Set values to vanilla blockstates to force fallback mappings.",
+        "Use '__keep__' to avoid remapping a namespace entry.",
     ],
 }
 
@@ -56,7 +66,7 @@ _DEFAULT_REMAP_TABLE = {
 @dataclass(frozen=True)
 class ExportBlockRemapRules:
     enabled: bool
-    namespace_remap: Dict[str, Block]
+    namespace_remap: Dict[str, Optional[Block]]
     block_remap: Dict[str, Block]
     path: str
 
@@ -87,6 +97,69 @@ def _ensure_default_file(path: str) -> None:
             json.dump(_DEFAULT_REMAP_TABLE, f, indent=2, sort_keys=True)
 
 
+def _migrate_legacy_rules(path: str, data: dict) -> dict:
+    if not isinstance(data, dict):
+        return deepcopy(_DEFAULT_REMAP_TABLE)
+
+    legacy_mode = data.get("schema_version") is None
+    if not legacy_mode:
+        return data
+
+    changed = False
+    namespace_remap = data.get("namespace_remap")
+    if not isinstance(namespace_remap, dict):
+        namespace_remap = {}
+        data["namespace_remap"] = namespace_remap
+        changed = True
+
+    for namespace, replacement in list(namespace_remap.items()):
+        if not isinstance(replacement, str):
+            continue
+        namespace_key = _normalise_key(namespace)
+        replacement_key = _normalise_key(replacement)
+        legacy_value = _LEGACY_NAMESPACE_REMAP.get(namespace_key)
+
+        if (
+            replacement_key == _normalise_key(_DEFAULT_NAMESPACE_FALLBACK)
+            or (
+                legacy_value is not None
+                and replacement_key == _normalise_key(legacy_value)
+            )
+        ):
+            namespace_remap[namespace] = _KEEP_SENTINEL
+            changed = True
+
+    block_remap = data.get("block_remap")
+    if not isinstance(block_remap, dict):
+        block_remap = {}
+        data["block_remap"] = block_remap
+        changed = True
+
+    for block_id, replacement in list(block_remap.items()):
+        if not isinstance(replacement, str):
+            continue
+        legacy_value = _LEGACY_BLOCK_REMAP.get(_normalise_key(block_id))
+        if legacy_value is not None and _normalise_key(replacement) == _normalise_key(
+            legacy_value
+        ):
+            del block_remap[block_id]
+            changed = True
+
+    if data.get("schema_version") != _SCHEMA_VERSION:
+        data["schema_version"] = _SCHEMA_VERSION
+        changed = True
+
+    if changed:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, sort_keys=True)
+        log.info(
+            "Migrated export remap table to safe keep-by-default behavior: %s",
+            path,
+        )
+
+    return data
+
+
 def _load_raw_rules_data(path: str) -> dict:
     _ensure_default_file(path)
     try:
@@ -94,10 +167,10 @@ def _load_raw_rules_data(path: str) -> dict:
             data = json.load(f)
         if not isinstance(data, dict):
             raise ValueError("Rules file must contain a JSON object.")
-        return data
+        return _migrate_legacy_rules(path, data)
     except Exception:
         log.exception("Could not parse export block remap table at %s", path)
-        return dict(_DEFAULT_REMAP_TABLE)
+        return deepcopy(_DEFAULT_REMAP_TABLE)
 
 
 def _iter_blocks(block: Block) -> Iterable[Block]:
@@ -136,7 +209,7 @@ def _append_missing_namespaces(path: str, namespaces: Iterable[str]) -> int:
     added = 0
     for namespace in sorted({_normalise_key(n) for n in namespaces if n}):
         if namespace not in existing:
-            namespace_remap[namespace] = _DEFAULT_NAMESPACE_FALLBACK
+            namespace_remap[namespace] = _KEEP_SENTINEL
             existing.add(namespace)
             added += 1
 
@@ -179,10 +252,21 @@ def load_export_block_remap_rules() -> ExportBlockRemapRules:
 
     enabled = bool(data.get("enabled", True))
 
-    namespace_remap: Dict[str, Block] = {}
+    namespace_remap: Dict[str, Optional[Block]] = {}
     for namespace, replacement in data.get("namespace_remap", {}).items():
         try:
-            namespace_remap[_normalise_key(namespace)] = _parse_blockstate(replacement)
+            key = _normalise_key(namespace)
+            if replacement is None:
+                namespace_remap[key] = None
+                continue
+            replacement_text = str(replacement).strip()
+            if (
+                not replacement_text
+                or _normalise_key(replacement_text) == _KEEP_SENTINEL
+            ):
+                namespace_remap[key] = None
+                continue
+            namespace_remap[key] = _parse_blockstate(replacement_text)
         except Exception:
             log.warning(
                 "Invalid namespace remap entry for %s in %s", namespace, path
@@ -211,8 +295,8 @@ def _remap_block(block: Block, rules: ExportBlockRemapRules, cache: Dict[Block, 
         return cache[block]
 
     replacement = rules.block_remap.get(_normalise_key(block.namespaced_name))
-    if replacement is None:
-        replacement = rules.namespace_remap.get(_normalise_key(block.namespace))
+    if replacement is None and _normalise_key(block.namespace) in rules.namespace_remap:
+        replacement = rules.namespace_remap[_normalise_key(block.namespace)]
 
     base_block = replacement if replacement is not None else block.base_block
     remapped_extras = tuple(_remap_block(extra, rules, cache) for extra in block.extra_blocks)
