@@ -78,6 +78,7 @@ class SelectionMoveButton(BaseSelectionMoveButton):
 
 
 class SelectTool(wx.BoxSizer, DefaultBaseToolUI):
+    _selection_mode: wx.Choice
     _x1: wx.SpinCtrl
     _y1: wx.SpinCtrl
     _z1: wx.SpinCtrl
@@ -95,6 +96,19 @@ class SelectTool(wx.BoxSizer, DefaultBaseToolUI):
         self._button_panel = SimpleScrollablePanel(canvas)
         button_sizer = wx.BoxSizer(wx.VERTICAL)
         self._button_panel.SetSizer(button_sizer)
+
+        mode_label = wx.StaticText(self._button_panel, label="Selection Mode")
+        button_sizer.Add(mode_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        self._selection_mode = wx.Choice(
+            self._button_panel,
+            choices=["Box Selection", "Lasso Selection (Top-Down)"],
+        )
+        self._selection_mode.SetSelection(0)
+        self._selection_mode.SetToolTip(
+            "Switch between normal box editing and freehand lasso selection."
+        )
+        self._selection_mode.Bind(wx.EVT_CHOICE, self._on_selection_mode_change)
+        button_sizer.Add(self._selection_mode, 0, wx.ALL | wx.EXPAND, 5)
 
         def add_button(
             label: str, tooltip: str, action: Callable[[wx.PyEventBinder], None]
@@ -233,6 +247,7 @@ class SelectTool(wx.BoxSizer, DefaultBaseToolUI):
 
     def enable(self):
         super().enable()
+        self._apply_selection_mode()
         self._selection.enable()
         self._pull_selection()
         self._point1_move.enable()
@@ -328,6 +343,16 @@ class SelectTool(wx.BoxSizer, DefaultBaseToolUI):
     def _set_scroll_state(self, state: bool):
         for scroll in (self._x1, self._y1, self._z1, self._x2, self._y2, self._z2):
             scroll.Enable(state)
+
+    def _on_selection_mode_change(self, evt: wx.CommandEvent):
+        self._apply_selection_mode()
+        evt.Skip()
+
+    def _apply_selection_mode(self):
+        lasso_mode = self._selection_mode.GetSelection() == 1
+        self._selection.lasso_mode = lasso_mode
+        if lasso_mode:
+            self.canvas.camera.projection_mode = Projection.TOP_DOWN
 
     def _on_draw(self, evt):
         global paint_log_count

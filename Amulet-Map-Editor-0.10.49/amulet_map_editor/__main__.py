@@ -106,6 +106,17 @@ except Exception as e_:
 
 
 def _init_log():
+    class _PyMCTranslateMissingCustomBlockFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            if record.levelno == logging.WARNING:
+                message = record.getMessage()
+                if (
+                    "Could not find translation information for block " in message
+                    and "If this is not a vanilla block ignore this message" in message
+                ):
+                    return False
+            return True
+
     logs_path = os.environ["LOG_DIR"]
     # set up handlers
     os.makedirs(logs_path, exist_ok=True)
@@ -144,6 +155,9 @@ def _init_log():
         handlers=[file_handler, console_handler],
         force=True,
     )
+    warning_filter = _PyMCTranslateMissingCustomBlockFilter()
+    file_handler.addFilter(warning_filter)
+    console_handler.addFilter(warning_filter)
 
     log = logging.getLogger(__name__)
 

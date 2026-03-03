@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Tuple, Optional
+from typing import TYPE_CHECKING, Tuple, Optional, List
 import time
 import numpy
 import wx
@@ -33,6 +33,7 @@ from ..key_config import (
     ACT_DESELECT_BOX,
     get_cursor_key_offset,
 )
+from .lasso_selection import interpolate_grid_line, lasso_points_to_selection_group
 
 if TYPE_CHECKING:
     from ..canvas import EditCanvas
@@ -102,6 +103,27 @@ class BlockSelectionBehaviour(PointerBehaviour):
         self._resizing = False  # is a box being resized
         self._pointer_distance2 = 0  # the pointer distance used when resizing
         self._cursor_nudge_timeout = 10
+        self._lasso_mode = False
+        self._lasso_points: List[Tuple[int, int]] = []
+        self._lasso_additive = False
+        self._lasso_original_selection = SelectionGroup()
+        self._lasso_base_selection = SelectionGroup()
+        self._lasso_min_y = 0
+        self._lasso_max_y = 1
+
+    @property
+    def lasso_mode(self) -> bool:
+        return self._lasso_mode
+
+    @lasso_mode.setter
+    def lasso_mode(self, value: bool):
+        value = bool(value)
+        if value == self._lasso_mode:
+            return
+        self._lasso_mode = value
+        self._lasso_points.clear()
+        self._lasso_additive = False
+        self._highlight = False
 
     def _create_active_selection(self):
         """Create the active selection if it does not exist."""
@@ -168,6 +190,36 @@ class BlockSelectionBehaviour(PointerBehaviour):
                 self._pointer_distance -= 1
             self._pointer_moved = True
         elif evt.action_id == ACT_BOX_CLICK:
+            if (
+                self._lasso_mode
+                and self.canvas.camera.projection_mode == Projection.TOP_DOWN
+                and not self._editing
+            ):
+                self._press_time = time.time()
+                self._editing = True
+                self._resizing = False
+                self._highlight = False
+                self._lasso_additive = (
+                    ACT_BOX_CLICK_ADD in self.canvas.buttons.pressed_actions
+                )
+                self._lasso_original_selection = self.selection_group
+                self._lasso_base_selection = (
+                    self._lasso_original_selection
+                    if self._lasso_additive
+                    else SelectionGroup()
+                )
+                world_bounds = self.canvas.world.bounds(self.canvas.dimension)
+                self._lasso_min_y = int(world_bounds.min[1])
+                self._lasso_max_y = int(world_bounds.max[1])
+                self._lasso_points.clear()
+                self._lasso_points.append(self._pointer_to_lasso_point())
+                self._selection.selection_group = self._lasso_base_selection
+                self._unload_active_selection()
+                self._update_lasso_preview()
+                self._disable_inputs()
+                evt.Skip()
+                return
+
             if not self._editing:
                 default_create = True
                 self._press_time = time.time()
@@ -257,6 +309,15 @@ class BlockSelectionBehaviour(PointerBehaviour):
 
     def _on_input_release(self, evt: InputReleaseEvent):
         if evt.action_id == ACT_BOX_CLICK:
+            if (
+                self._lasso_mode
+                and self.canvas.camera.projection_mode == Projection.TOP_DOWN
+                and self._editing
+            ):
+                self._editing = self._resizing = False
+                self._commit_lasso_selection()
+                evt.Skip()
+                return
             if self._editing and time.time() - self._press_time > 0.1:
                 self._editing = self._resizing = False
                 self._enable_inputs()
@@ -290,6 +351,17 @@ class BlockSelectionBehaviour(PointerBehaviour):
     def _escape(self):
         """Reset the state to how it was before editing."""
         if self._editing:
+            if (
+                self._lasso_mode
+                and self.canvas.camera.projection_mode == Projection.TOP_DOWN
+            ):
+                self._editing = self._resizing = False
+                self._highlight = False
+                self._lasso_points.clear()
+                self._lasso_additive = False
+                self.selection_group = self._lasso_original_selection
+                self._post_change_event()
+                return
             if self._initial_box is None:
                 # there was no initial box
                 if self._selection:
@@ -311,6 +383,62 @@ class BlockSelectionBehaviour(PointerBehaviour):
             self._editing = self._resizing = False
             self._highlight = False
             self._post_change_event()
+
+    def _pointer_to_lasso_point(self) -> Tuple[int, int]:
+        return (
+            int(numpy.floor(self._pointer.point1[0])),
+            int(numpy.floor(self._pointer.point1[2])),
+        )
+
+    def _commit_lasso_selection(self):
+        if not self._lasso_points:
+            self.selection_group = self._lasso_original_selection
+            if self.selection_group:
+                self._enable_inputs()
+            else:
+                self._disable_inputs()
+            self._lasso_additive = False
+            return
+
+        lasso_group = lasso_points_to_selection_group(
+            self._lasso_points,
+            self._lasso_min_y,
+            self._lasso_max_y,
+        )
+
+        if self._lasso_additive:
+            selection_group = self._lasso_base_selection + lasso_group
+        else:
+            selection_group = lasso_group
+
+        selection_group = selection_group.merge_boxes()
+        self.selection_group = selection_group
+        self.push_selection()
+        if selection_group:
+            self._enable_inputs()
+        else:
+            self._disable_inputs()
+        self._lasso_points.clear()
+        self._lasso_additive = False
+        self._post_change_event()
+
+    def _update_lasso_preview(self):
+        if not self._lasso_points:
+            preview_group = self._lasso_base_selection
+        else:
+            lasso_group = lasso_points_to_selection_group(
+                self._lasso_points,
+                self._lasso_min_y,
+                self._lasso_max_y,
+            )
+            if self._lasso_additive:
+                preview_group = self._lasso_base_selection + lasso_group
+            else:
+                preview_group = lasso_group
+            preview_group = preview_group.merge_boxes()
+
+        self._selection.selection_group = preview_group
+        self._highlight = False
 
     def _get_active_points(self) -> Tuple[NPArray2x3, NPArray2x3]:
         """Get the 1x1x1 box coords for the active selection."""
@@ -453,6 +581,26 @@ class BlockSelectionBehaviour(PointerBehaviour):
 
             self._pointer.point1, self._pointer.point2 = location, location + 1
             self._pointer_moved = False
+            if (
+                self._lasso_mode
+                and self.canvas.camera.projection_mode == Projection.TOP_DOWN
+            ):
+                if self._editing:
+                    point = self._pointer_to_lasso_point()
+                    if not self._lasso_points:
+                        self._lasso_points.append(point)
+                        self._update_lasso_preview()
+                    elif point != self._lasso_points[-1]:
+                        self._lasso_points.extend(
+                            interpolate_grid_line(self._lasso_points[-1], point)[1:]
+                        )
+                        self._update_lasso_preview()
+                else:
+                    self._highlight = False
+                    self._selection.reset_highlight_edges()
+                    if self._active_selection is not None:
+                        self._active_selection.reset_highlight_edges()
+                return
             if self._editing:
                 (
                     self._active_selection.point1,

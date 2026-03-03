@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING
+import logging
 import wx
 import os
 
@@ -12,10 +13,17 @@ from amulet_map_editor.programs.edit.api.operations import (
     SimpleOperationPanel,
     OperationError,
 )
+from amulet_map_editor.programs.edit.plugins.operations.stock_plugins.export_operations.custom_block_remap import (
+    build_export_remap_table_for_selection,
+    remap_chunk_for_export,
+)
 
 if TYPE_CHECKING:
     from amulet.api.level import BaseLevel
     from amulet_map_editor.programs.edit.api.canvas import EditCanvas
+
+
+log = logging.getLogger(__name__)
 
 
 class ExportConstruction(SimpleOperationPanel):
@@ -85,14 +93,30 @@ class ExportConstruction(SimpleOperationPanel):
             wrapper.translation_manager = world.translation_manager
             wrapper_dimension = wrapper.dimensions[0]
             chunk_count = len(list(selection.chunk_locations()))
+            remap_rules = build_export_remap_table_for_selection(
+                world, dimension, selection
+            )
+            remap_total = 0
+            remap_chunks = 0
             yield 0, f"Exporting {os.path.basename(path)}"
             for chunk_index, (cx, cz) in enumerate(selection.chunk_locations()):
                 try:
                     chunk = world.get_chunk(cx, cz, dimension)
-                    wrapper.commit_chunk(chunk, wrapper_dimension)
+                    export_chunk, replaced = remap_chunk_for_export(chunk, remap_rules)
+                    if replaced:
+                        remap_total += replaced
+                        remap_chunks += 1
+                    wrapper.commit_chunk(export_chunk, wrapper_dimension)
                 except ChunkLoadError:
                     continue
                 yield (chunk_index + 1) / chunk_count
+            if remap_total:
+                log.info(
+                    "Export block remap replaced %s blocks across %s chunk(s). Table: %s",
+                    remap_total,
+                    remap_chunks,
+                    remap_rules.path,
+                )
             wrapper.save()
             wrapper.close()
         else:
