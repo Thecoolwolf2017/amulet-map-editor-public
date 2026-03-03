@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from typing import Dict, Optional, Tuple
 
@@ -13,6 +14,8 @@ from amulet_map_editor.programs.edit.plugins.operations.stock_plugins.export_ope
     collect_export_remap_preview,
     update_export_block_remap_table,
 )
+
+log = logging.getLogger(__name__)
 
 
 def _launch_path(path: str) -> bool:
@@ -157,12 +160,19 @@ class _RemapPreviewDialog(wx.Dialog):
     def wizard_result_id(self) -> int:
         return self._wizard_result_id
 
-    def _close_with_result(self, result_id: int) -> None:
+    def _close_with_result(self, result_id: int, _retries: int = 20) -> None:
         if self.IsModal():
             self.EndModal(result_id)
             return
-        self.SetReturnCode(result_id)
-        self.Close()
+        if _retries <= 0:
+            log.warning(
+                "Remap preview dialog did not enter modal state; forcing close with return code %s.",
+                result_id,
+            )
+            self.SetReturnCode(result_id)
+            self.Close()
+            return
+        wx.CallLater(1, self._close_with_result, result_id, _retries - 1)
 
     def _refresh_entry_list(self, _evt=None):
         self._entry_list.DeleteAllItems()
