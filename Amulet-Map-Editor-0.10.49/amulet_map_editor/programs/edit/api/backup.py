@@ -436,13 +436,13 @@ def restore_latest_backup(world_path: str) -> Dict[str, Any]:
 
 
 def iter_backup(
-    world_path: str, reason: str
+    world_path: str, reason: str, *, force: bool = False
 ) -> Generator[Tuple[float, str], None, str]:
     """
     Create a backup of a world directory or file.
     Yields (progress, message) and returns backup path.
     """
-    if not backups_enabled():
+    if not force and not backups_enabled():
         return ""
 
     world_path = os.path.abspath(world_path)

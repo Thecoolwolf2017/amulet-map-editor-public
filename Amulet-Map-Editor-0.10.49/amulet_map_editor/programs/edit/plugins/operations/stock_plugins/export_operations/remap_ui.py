@@ -33,15 +33,20 @@ class _RemapPreviewDialog(wx.Dialog):
         self,
         parent: wx.Window,
         preview: ExportRemapPreview,
-        allow_export: bool = False,
+        *,
+        title: str,
+        allow_confirm: bool = False,
+        primary_action_label: str = "Continue",
+        secondary_action_label: str = "Remap Wizard",
+        close_label: str = "Close",
     ):
         super().__init__(
             parent,
-            title="Export Remap Preview",
+            title=title,
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
         )
         self._preview = preview
-        self._allow_export = allow_export
+        self._allow_confirm = allow_confirm
         self._wizard_result_id = int(wx.NewIdRef())
 
         root = wx.BoxSizer(wx.VERTICAL)
@@ -108,11 +113,12 @@ class _RemapPreviewDialog(wx.Dialog):
         button_row.Add(open_button, 0, wx.ALL, 5)
         button_row.AddStretchSpacer()
 
-        if allow_export:
-            export_button = wx.Button(self, wx.ID_YES, "Export")
-            export_button.SetDefault()
-            button_row.Add(export_button, 0, wx.ALL, 5)
+        if allow_confirm:
+            confirm_button = wx.Button(self, wx.ID_YES, primary_action_label)
+            confirm_button.SetDefault()
+            button_row.Add(confirm_button, 0, wx.ALL, 5)
             wizard_button = wx.Button(self, wx.ID_NO, "Remap Wizard")
+            wizard_button.SetLabel(secondary_action_label)
             button_row.Add(wizard_button, 0, wx.ALL, 5)
             cancel_button = wx.Button(self, wx.ID_CANCEL, "Cancel")
             button_row.Add(cancel_button, 0, wx.ALL, 5)
@@ -124,7 +130,7 @@ class _RemapPreviewDialog(wx.Dialog):
                 wx.EVT_BUTTON, lambda _evt: self.EndModal(self._wizard_result_id)
             )
             button_row.Add(wizard_button, 0, wx.ALL, 5)
-            close_button = wx.Button(self, wx.ID_CLOSE, "Close")
+            close_button = wx.Button(self, wx.ID_CLOSE, close_label)
             close_button.Bind(wx.EVT_BUTTON, lambda _evt: self.EndModal(wx.ID_CLOSE))
             close_button.SetDefault()
             button_row.Add(close_button, 0, wx.ALL, 5)
@@ -316,9 +322,26 @@ class ExportRemapWorkflowMixin:
         preview = collect_export_remap_preview(self.world, dimension, selection, rules)
         return rules, preview
 
+    def _remap_preview_title(self) -> str:
+        return "Export Remap Preview"
+
+    def _remap_confirm_title(self) -> str:
+        return "Confirm Export Remap"
+
+    def _remap_primary_action_label(self) -> str:
+        return "Export"
+
+    def _remap_secondary_action_label(self) -> str:
+        return "Remap Wizard"
+
     def _preview_remap_button_clicked(self, _evt):
         rules, preview = self._build_preview()
-        dialog = _RemapPreviewDialog(self, preview, allow_export=False)
+        dialog = _RemapPreviewDialog(
+            self,
+            preview,
+            title=self._remap_preview_title(),
+            allow_confirm=False,
+        )
         try:
             result = dialog.ShowModal()
             if result == dialog.wizard_result_id:
@@ -355,7 +378,15 @@ class ExportRemapWorkflowMixin:
             return True
 
         while True:
-            dialog = _RemapPreviewDialog(self, preview, allow_export=True)
+            dialog = _RemapPreviewDialog(
+                self,
+                preview,
+                title=self._remap_confirm_title(),
+                allow_confirm=True,
+                primary_action_label=self._remap_primary_action_label(),
+                secondary_action_label=self._remap_secondary_action_label(),
+                close_label="Cancel",
+            )
             try:
                 result = dialog.ShowModal()
             finally:
@@ -377,3 +408,7 @@ class ExportRemapWorkflowMixin:
         if rules is not None:
             return rules
         return build_export_remap_table_for_selection(self.world, dimension, selection)
+
+
+# Helper module only; keep plugin autoloader quiet by exposing an empty export list.
+export = []

@@ -383,6 +383,21 @@ class BackupWorkflowTests(unittest.TestCase):
             os.path.exists(os.path.join(backup_path, ".amulet_backup_warnings.txt"))
         )
 
+    def test_force_backup_runs_even_when_backups_disabled(self):
+        backup_module.set_backup_settings(
+            enabled=False,
+            backup_root=os.path.join(self._tmp.name, "backups"),
+            retention_count=5,
+        )
+
+        world_path = self._make_world("force_backup_world", "level.dat", "current")
+        backup_path = _exhaust(
+            backup_module.iter_backup(world_path, "forced-pre-migrate", force=True)
+        )
+
+        self.assertTrue(backup_path)
+        self.assertTrue(os.path.exists(os.path.join(backup_path, "level.dat")))
+
 
 if __name__ == "__main__":
     unittest.main()

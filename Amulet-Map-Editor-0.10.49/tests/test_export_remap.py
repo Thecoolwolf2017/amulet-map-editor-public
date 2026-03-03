@@ -13,6 +13,7 @@ from amulet_map_editor.programs.edit.plugins.operations.stock_plugins.export_ope
     build_export_remap_table_for_selection,
     collect_export_remap_preview,
     load_export_block_remap_rules,
+    migrate_selection_in_world,
     remap_chunk_for_export,
     update_export_block_remap_table,
 )
@@ -32,6 +33,9 @@ class _World:
 
     def get_chunk(self, cx, cz, _dimension):
         return self._chunks[(cx, cz)]
+
+    def put_chunk(self, chunk, _dimension):
+        self._chunks[(chunk.cx, chunk.cz)] = chunk
 
 
 def _make_chunk_with_custom_block():
@@ -167,6 +171,29 @@ class ExportRemapTests(unittest.TestCase):
         with open(table_path, "r", encoding="utf-8") as f:
             table = json.load(f)
         self.assertNotIn("myaddon:machine", table.get("block_remap", {}))
+
+    def test_migrate_selection_in_world_applies_remap(self):
+        chunk, custom_count = _make_chunk_with_custom_block()
+        world = _World({(0, 0): chunk})
+        selection = _Selection([(0, 0)])
+        rules = build_export_remap_table_for_selection(
+            world, "minecraft:overworld", selection
+        )
+
+        result = migrate_selection_in_world(
+            world, "minecraft:overworld", selection, rules
+        )
+
+        self.assertEqual(result.total_chunks, 1)
+        self.assertEqual(result.scanned_chunks, 1)
+        self.assertEqual(result.failed_chunks, 0)
+        self.assertEqual(result.remapped_chunks, 1)
+        self.assertEqual(result.remapped_blocks, custom_count)
+
+        out_chunk = world.get_chunk(0, 0, "minecraft:overworld")
+        ids = numpy.unique(out_chunk.blocks.get_sub_chunk(0))
+        names = {out_chunk.block_palette[int(i)].namespaced_name for i in ids}
+        self.assertNotIn("myaddon:machine", names)
 
 
 if __name__ == "__main__":

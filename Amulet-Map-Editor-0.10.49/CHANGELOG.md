@@ -9,6 +9,8 @@
 - Automatic pre-export namespace discovery that appends missing custom namespaces to the local remap table.
 - Export remap preview report in the export UI (`Preview Remap`) with a color-coded remap table and chunk/block impact totals.
 - Export remap wizard in the export UI for editing custom block remaps without leaving the app.
+- One-click `Migrate Custom Blocks In-World` operation that applies remaps directly to selected chunks.
+- In-world migration now always creates a safety backup before applying remaps.
 - Lasso selection unit tests (`tests/test_lasso_selection.py`).
 
 ### Fixed

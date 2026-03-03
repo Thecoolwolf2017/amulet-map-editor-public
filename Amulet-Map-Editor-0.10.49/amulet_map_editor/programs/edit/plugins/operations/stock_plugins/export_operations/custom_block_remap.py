@@ -95,6 +95,15 @@ class ExportRemapPreview:
     entries: Tuple[ExportRemapPreviewEntry, ...]
 
 
+@dataclass(frozen=True)
+class InWorldRemapResult:
+    total_chunks: int
+    scanned_chunks: int
+    failed_chunks: int
+    remapped_chunks: int
+    remapped_blocks: int
+
+
 def _normalise_key(key: str) -> str:
     return str(key).strip().lower()
 
@@ -581,6 +590,42 @@ def collect_export_remap_preview(
         custom_block_total=custom_block_total,
         remapped_block_total=remapped_block_total,
         entries=entries,
+    )
+
+
+def migrate_selection_in_world(
+    world: "BaseLevel",
+    dimension: "Dimension",
+    selection: "SelectionGroup",
+    rules: ExportBlockRemapRules,
+) -> InWorldRemapResult:
+    chunk_locations = list(selection.chunk_locations())
+    total_chunks = len(chunk_locations)
+    scanned_chunks = 0
+    failed_chunks = 0
+    remapped_chunks = 0
+    remapped_blocks = 0
+
+    for cx, cz in chunk_locations:
+        try:
+            source_chunk = world.get_chunk(cx, cz, dimension)
+        except Exception:
+            failed_chunks += 1
+            continue
+
+        scanned_chunks += 1
+        remapped_chunk, replaced = remap_chunk_for_export(source_chunk, rules)
+        if replaced > 0:
+            world.put_chunk(remapped_chunk, dimension)
+            remapped_chunks += 1
+            remapped_blocks += replaced
+
+    return InWorldRemapResult(
+        total_chunks=total_chunks,
+        scanned_chunks=scanned_chunks,
+        failed_chunks=failed_chunks,
+        remapped_chunks=remapped_chunks,
+        remapped_blocks=remapped_blocks,
     )
 
 
