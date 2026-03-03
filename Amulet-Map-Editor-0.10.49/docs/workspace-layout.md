@@ -7,6 +7,7 @@ This repository intentionally keeps source under `Amulet-Map-Editor-0.10.49/`.
 - Source code: `amulet_map_editor/`
 - Tests: `tests/`
 - Docs: `docs/`
+- Remote/release repo record: `docs/repository-remotes.md`
 - Build spec: `Amulet.spec`
 - Runtime executable: `dist/Amulet/amulet_app.exe`
 - Release artifacts: `dist/Amulet-v*-Windows-x64.zip`, `dist/SHA256SUMS.txt`
