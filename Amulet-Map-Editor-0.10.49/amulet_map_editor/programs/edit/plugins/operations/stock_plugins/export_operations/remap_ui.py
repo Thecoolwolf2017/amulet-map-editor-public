@@ -47,7 +47,10 @@ class _RemapPreviewDialog(wx.Dialog):
         )
         self._preview = preview
         self._allow_confirm = allow_confirm
-        self._wizard_result_id = int(wx.NewIdRef())
+        # Keep the ID reference alive for the dialog lifetime to avoid wx ID
+        # ref-count assertions when the button/window is destroyed.
+        self._wizard_result_id_ref = wx.NewIdRef()
+        self._wizard_result_id = int(self._wizard_result_id_ref)
 
         root = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(root)
