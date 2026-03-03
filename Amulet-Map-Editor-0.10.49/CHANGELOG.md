@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.0.0-rc4 (2026-03-03)
+
+### Fixed
+- Resolved a wx dialog assertion crash in export remap preview:
+  - `DecIdRefCount(): id count already 0`
+  - triggered when opening/closing `Preview Remap` repeatedly.
+- Kept the `wx.NewIdRef()` object alive for the preview dialog lifetime so
+  wx can safely balance window ID reference counts on destroy.
+
 ## v2.0.0-rc3 (2026-03-03)
 
 ### Added
