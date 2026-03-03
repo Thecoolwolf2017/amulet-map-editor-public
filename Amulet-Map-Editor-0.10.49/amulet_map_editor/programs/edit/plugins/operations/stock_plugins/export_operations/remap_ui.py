@@ -118,25 +118,33 @@ class _RemapPreviewDialog(wx.Dialog):
 
         if allow_confirm:
             confirm_button = wx.Button(self, wx.ID_YES, primary_action_label)
+            confirm_button.Bind(wx.EVT_BUTTON, lambda _evt: self._close_with_result(wx.ID_YES))
             confirm_button.SetDefault()
             button_row.Add(confirm_button, 0, wx.ALL, 5)
             wizard_button = wx.Button(self, wx.ID_NO, "Remap Wizard")
             wizard_button.SetLabel(secondary_action_label)
+            wizard_button.Bind(wx.EVT_BUTTON, lambda _evt: self._close_with_result(wx.ID_NO))
             button_row.Add(wizard_button, 0, wx.ALL, 5)
             cancel_button = wx.Button(self, wx.ID_CANCEL, "Cancel")
+            cancel_button.Bind(wx.EVT_BUTTON, lambda _evt: self._close_with_result(wx.ID_CANCEL))
             button_row.Add(cancel_button, 0, wx.ALL, 5)
+            self.SetAffirmativeId(wx.ID_YES)
+            self.SetEscapeId(wx.ID_CANCEL)
         else:
             wizard_button = wx.Button(
                 self, self._wizard_result_id, "Open Remap Wizard"
             )
             wizard_button.Bind(
-                wx.EVT_BUTTON, lambda _evt: self.EndModal(self._wizard_result_id)
+                wx.EVT_BUTTON,
+                lambda _evt: self._close_with_result(self._wizard_result_id),
             )
             button_row.Add(wizard_button, 0, wx.ALL, 5)
             close_button = wx.Button(self, wx.ID_CLOSE, close_label)
-            close_button.Bind(wx.EVT_BUTTON, lambda _evt: self.EndModal(wx.ID_CLOSE))
+            close_button.Bind(wx.EVT_BUTTON, lambda _evt: self._close_with_result(wx.ID_CLOSE))
             close_button.SetDefault()
             button_row.Add(close_button, 0, wx.ALL, 5)
+            self.SetAffirmativeId(wx.ID_CLOSE)
+            self.SetEscapeId(wx.ID_CLOSE)
 
         root.Add(button_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 4)
 
@@ -148,6 +156,13 @@ class _RemapPreviewDialog(wx.Dialog):
     @property
     def wizard_result_id(self) -> int:
         return self._wizard_result_id
+
+    def _close_with_result(self, result_id: int) -> None:
+        if self.IsModal():
+            self.EndModal(result_id)
+            return
+        self.SetReturnCode(result_id)
+        self.Close()
 
     def _refresh_entry_list(self, _evt=None):
         self._entry_list.DeleteAllItems()
