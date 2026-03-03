@@ -73,6 +73,28 @@ class ExportBlockRemapRules:
     path: str
 
 
+@dataclass(frozen=True)
+class ExportRemapPreviewEntry:
+    source_block: str
+    replacement_block: str
+    block_count: int
+
+
+@dataclass(frozen=True)
+class ExportRemapPreview:
+    rules_path: str
+    remap_enabled: bool
+    auto_block_remap: bool
+    total_chunks: int
+    scanned_chunks: int
+    failed_chunks: int
+    custom_namespace_count: int
+    custom_block_count: int
+    custom_block_total: int
+    remapped_block_total: int
+    entries: Tuple[ExportRemapPreviewEntry, ...]
+
+
 def _normalise_key(key: str) -> str:
     return str(key).strip().lower()
 
@@ -219,6 +241,27 @@ def _collect_chunk_custom_blocks(chunk: Chunk) -> Set[Block]:
     return blocks
 
 
+def _custom_namespaces_in_block(block: Block) -> Set[str]:
+    namespaces: Set[str] = set()
+    for block_part in _iter_blocks(block):
+        namespace = _normalise_key(block_part.namespace)
+        if namespace and namespace not in {"minecraft", "universal", "universal_minecraft"}:
+            namespaces.add(namespace)
+    return namespaces
+
+
+def _chunk_palette_usage_counts(chunk: Chunk) -> Dict[int, int]:
+    counts: Dict[int, int] = {}
+    for cy in chunk.blocks.sub_chunks:
+        palette_ids, palette_counts = numpy.unique(
+            chunk.blocks.get_sub_chunk(cy), return_counts=True
+        )
+        for palette_id, palette_count in zip(palette_ids, palette_counts):
+            key = int(palette_id)
+            counts[key] = counts.get(key, 0) + int(palette_count)
+    return counts
+
+
 def _guess_vanilla_blockstate_for_custom(block: Block) -> str:
     name = _normalise_key(block.base_name)
 
@@ -295,6 +338,76 @@ def _guess_vanilla_blockstate_for_custom(block: Block) -> str:
             return fallback
 
     return _DEFAULT_NAMESPACE_FALLBACK
+
+
+def update_export_block_remap_table(
+    path: Optional[str] = None,
+    *,
+    block_remap_updates: Optional[Dict[str, Optional[str]]] = None,
+    auto_block_remap: Optional[bool] = None,
+    enabled: Optional[bool] = None,
+) -> int:
+    if path is None:
+        path = _default_remap_path()
+    data = _load_raw_rules_data(path)
+    changed = 0
+
+    if enabled is not None:
+        enabled_bool = bool(enabled)
+        if bool(data.get("enabled", True)) != enabled_bool:
+            data["enabled"] = enabled_bool
+            changed += 1
+
+    if auto_block_remap is not None:
+        auto_block_remap_bool = bool(auto_block_remap)
+        if bool(data.get("auto_block_remap", True)) != auto_block_remap_bool:
+            data["auto_block_remap"] = auto_block_remap_bool
+            changed += 1
+
+    if block_remap_updates is not None:
+        block_remap = data.get("block_remap")
+        if not isinstance(block_remap, dict):
+            block_remap = {}
+
+        existing_key_lookup = {
+            _normalise_key(existing_key): existing_key for existing_key in block_remap.keys()
+        }
+
+        for source_block_id, replacement in block_remap_updates.items():
+            source_key = _normalise_key(source_block_id)
+            if ":" not in source_key:
+                raise ValueError(f"Block remap key must be namespace:block. Got {source_block_id!r}")
+
+            existing_key = existing_key_lookup.get(source_key, source_key)
+            if existing_key != source_key and existing_key in block_remap:
+                del block_remap[existing_key]
+                changed += 1
+
+            replacement_text = None
+            if replacement is not None:
+                replacement_text = str(replacement).strip()
+            if not replacement_text:
+                if source_key in block_remap:
+                    del block_remap[source_key]
+                    changed += 1
+                continue
+
+            replacement_block = _parse_blockstate(replacement_text)
+            replacement_blockstate = replacement_block.blockstate
+
+            if block_remap.get(source_key) != replacement_blockstate:
+                block_remap[source_key] = replacement_blockstate
+                changed += 1
+
+            existing_key_lookup[source_key] = source_key
+
+        data["block_remap"] = block_remap
+
+    if changed:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, sort_keys=True)
+
+    return changed
 
 
 def _append_missing_block_remaps(path: str, blocks: Iterable[Block]) -> int:
@@ -393,6 +506,82 @@ def build_export_remap_table_for_selection(
         )
         rules = load_export_block_remap_rules()
     return rules
+
+
+def collect_export_remap_preview(
+    world: "BaseLevel",
+    dimension: "Dimension",
+    selection: "SelectionGroup",
+    rules: Optional[ExportBlockRemapRules] = None,
+) -> ExportRemapPreview:
+    if rules is None:
+        rules = load_export_block_remap_rules()
+
+    raw_data = _load_raw_rules_data(rules.path)
+    chunk_locations = list(selection.chunk_locations())
+    total_chunks = len(chunk_locations)
+    scanned_chunks = 0
+    failed_chunks = 0
+    custom_namespaces: Set[str] = set()
+    custom_blocks: Set[str] = set()
+    custom_block_total = 0
+    remapped_block_total = 0
+    remap_counts: Dict[Tuple[str, str], int] = {}
+    remap_cache: Dict[Block, Block] = {}
+
+    for cx, cz in chunk_locations:
+        try:
+            chunk = world.get_chunk(cx, cz, dimension)
+            usage_counts = _chunk_palette_usage_counts(chunk)
+        except Exception:
+            failed_chunks += 1
+            continue
+
+        scanned_chunks += 1
+        for palette_id, placed_count in usage_counts.items():
+            block = chunk.block_palette[palette_id]
+            namespaces_in_block = _custom_namespaces_in_block(block)
+            if not namespaces_in_block:
+                continue
+
+            custom_namespaces.update(namespaces_in_block)
+            custom_blocks.add(_normalise_key(block.namespaced_name))
+            custom_block_total += placed_count
+
+            replacement = _remap_block(block, rules, remap_cache)
+            source_name = _normalise_key(block.namespaced_name)
+            replacement_name = _normalise_key(replacement.namespaced_name)
+            remap_counts[(source_name, replacement_name)] = (
+                remap_counts.get((source_name, replacement_name), 0) + placed_count
+            )
+            if replacement != block:
+                remapped_block_total += placed_count
+
+    entries = tuple(
+        ExportRemapPreviewEntry(
+            source_block=source_block,
+            replacement_block=replacement_block,
+            block_count=block_count,
+        )
+        for (source_block, replacement_block), block_count in sorted(
+            remap_counts.items(),
+            key=lambda item: (-item[1], item[0][0], item[0][1]),
+        )
+    )
+
+    return ExportRemapPreview(
+        rules_path=rules.path,
+        remap_enabled=rules.enabled,
+        auto_block_remap=bool(raw_data.get("auto_block_remap", True)),
+        total_chunks=total_chunks,
+        scanned_chunks=scanned_chunks,
+        failed_chunks=failed_chunks,
+        custom_namespace_count=len(custom_namespaces),
+        custom_block_count=len(custom_blocks),
+        custom_block_total=custom_block_total,
+        remapped_block_total=remapped_block_total,
+        entries=entries,
+    )
 
 
 def load_export_block_remap_rules() -> ExportBlockRemapRules:

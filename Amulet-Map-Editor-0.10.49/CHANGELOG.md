@@ -7,6 +7,8 @@
 - Live lasso selection preview while dragging, including additive lasso behavior with `Ctrl`.
 - Export remap table support for custom namespaces/blocks via `custom_block_export_remap.json`.
 - Automatic pre-export namespace discovery that appends missing custom namespaces to the local remap table.
+- Export remap preview report in the export UI (`Preview Remap`) with chunk/block impact totals.
+- Export remap wizard in the export UI for editing custom block remaps without leaving the app.
 - Lasso selection unit tests (`tests/test_lasso_selection.py`).
 
 ### Fixed
@@ -26,6 +28,7 @@
   - Schematic (legacy),
   - Sponge Schematic,
   - Bedrock `.mcstructure`.
+- Export dialogs now show a remap confirmation summary when custom blocks are detected before writing files.
 - Custom fork behavior now suppresses upstream update popups by default.
 - Build pipeline supports fallback self-signed executable signing when signing secrets are unavailable.
 

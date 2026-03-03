@@ -11,8 +11,10 @@ from amulet.api.registry import BlockManager
 
 from amulet_map_editor.programs.edit.plugins.operations.stock_plugins.export_operations.custom_block_remap import (
     build_export_remap_table_for_selection,
+    collect_export_remap_preview,
     load_export_block_remap_rules,
     remap_chunk_for_export,
+    update_export_block_remap_table,
 )
 
 
@@ -105,6 +107,66 @@ class ExportRemapTests(unittest.TestCase):
         names = {out_chunk.block_palette[int(i)].namespaced_name for i in ids}
         self.assertIn("minecraft:stone", names)
         self.assertNotIn("myaddon:machine", names)
+
+    def test_collect_export_remap_preview_reports_counts(self):
+        chunk, custom_count = _make_chunk_with_custom_block()
+        world = _World({(0, 0): chunk})
+        selection = _Selection([(0, 0)])
+        rules = build_export_remap_table_for_selection(
+            world, "minecraft:overworld", selection
+        )
+
+        preview = collect_export_remap_preview(
+            world, "minecraft:overworld", selection, rules
+        )
+
+        self.assertEqual(preview.total_chunks, 1)
+        self.assertEqual(preview.scanned_chunks, 1)
+        self.assertEqual(preview.failed_chunks, 0)
+        self.assertEqual(preview.custom_namespace_count, 1)
+        self.assertEqual(preview.custom_block_count, 1)
+        self.assertEqual(preview.custom_block_total, custom_count)
+        self.assertEqual(preview.remapped_block_total, custom_count)
+        self.assertTrue(preview.entries)
+        self.assertEqual(preview.entries[0].source_block, "myaddon:machine")
+        self.assertNotEqual(
+            preview.entries[0].replacement_block, preview.entries[0].source_block
+        )
+
+    def test_update_export_block_remap_table_round_trip(self):
+        table_path = os.path.join(self._tmp.name, "custom_block_export_remap.json")
+        with open(table_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "schema_version": 2,
+                    "enabled": True,
+                    "auto_block_remap": True,
+                    "namespace_remap": {},
+                    "block_remap": {},
+                },
+                f,
+            )
+
+        changed = update_export_block_remap_table(
+            table_path,
+            block_remap_updates={"myaddon:machine": "minecraft:iron_block"},
+            auto_block_remap=False,
+            enabled=True,
+        )
+        self.assertGreaterEqual(changed, 1)
+
+        with open(table_path, "r", encoding="utf-8") as f:
+            table = json.load(f)
+        self.assertEqual(table["block_remap"]["myaddon:machine"], "minecraft:iron_block")
+        self.assertFalse(table["auto_block_remap"])
+
+        changed = update_export_block_remap_table(
+            table_path, block_remap_updates={"myaddon:machine": None}
+        )
+        self.assertEqual(changed, 1)
+        with open(table_path, "r", encoding="utf-8") as f:
+            table = json.load(f)
+        self.assertNotIn("myaddon:machine", table.get("block_remap", {}))
 
 
 if __name__ == "__main__":

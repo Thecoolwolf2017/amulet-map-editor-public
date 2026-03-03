@@ -14,8 +14,10 @@ from amulet_map_editor.programs.edit.api.operations import (
     OperationError,
 )
 from amulet_map_editor.programs.edit.plugins.operations.stock_plugins.export_operations.custom_block_remap import (
-    build_export_remap_table_for_selection,
     remap_chunk_for_export,
+)
+from amulet_map_editor.programs.edit.plugins.operations.stock_plugins.export_operations.remap_ui import (
+    ExportRemapWorkflowMixin,
 )
 
 if TYPE_CHECKING:
@@ -26,7 +28,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-class ExportConstruction(SimpleOperationPanel):
+class ExportConstruction(ExportRemapWorkflowMixin, SimpleOperationPanel):
     def __init__(
         self,
         parent: wx.Window,
@@ -48,6 +50,7 @@ class ExportConstruction(SimpleOperationPanel):
         )
         self._sizer.Add(self._version_define, 0, wx.ALL | wx.EXPAND, 5)
 
+        self._init_export_remap_workflow()
         self._add_run_button("Export")
         self.Layout()
 
@@ -79,7 +82,7 @@ class ExportConstruction(SimpleOperationPanel):
             if file_dialog.ShowModal() == wx.ID_CANCEL:
                 return False
             self._path = file_dialog.GetPath()
-        return True
+        return self._confirm_pre_export_preview()
 
     def _operation(
         self, world: "BaseLevel", dimension: Dimension, selection: SelectionGroup
@@ -93,9 +96,7 @@ class ExportConstruction(SimpleOperationPanel):
             wrapper.translation_manager = world.translation_manager
             wrapper_dimension = wrapper.dimensions[0]
             chunk_count = len(list(selection.chunk_locations()))
-            remap_rules = build_export_remap_table_for_selection(
-                world, dimension, selection
-            )
+            remap_rules = self._consume_prepared_remap_rules(dimension, selection)
             remap_total = 0
             remap_chunks = 0
             yield 0, f"Exporting {os.path.basename(path)}"
