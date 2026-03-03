@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 
 from amulet_map_editor.api import lang
 from amulet_map_editor.api.framework import app
+from amulet_map_editor import APP_NAME, APP_TAGLINE
 from amulet_map_editor.api.wx.ui.simple import SimplePanel
 from amulet_map_editor.api.wx.ui.select_world import WorldUI
 from amulet_map_editor.api.framework.programs import BaseProgram
@@ -15,6 +16,13 @@ class AboutProgram(SimplePanel, BaseProgram):
     def __init__(self, container, world: "BaseLevel"):
         SimplePanel.__init__(self, container)
         self.world = world
+
+        heading = wx.StaticText(self, label=f"{APP_NAME}\n{APP_TAGLINE}")
+        heading_font = heading.GetFont()
+        heading_font.SetPointSize(16)
+        heading_font.SetWeight(wx.FONTWEIGHT_BOLD)
+        heading.SetFont(heading_font)
+        self.add_object(heading, 0, wx.ALL | wx.CENTER)
 
         self._close_world_button = wx.Button(
             self, wx.ID_ANY, label=lang.get("world.close_world")

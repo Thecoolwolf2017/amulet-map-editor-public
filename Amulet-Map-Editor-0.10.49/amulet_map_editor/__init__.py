@@ -6,6 +6,10 @@ experimental_bedrock_resources = False
 # upstream Amulet-Team release feed by default.
 enable_update_check = False
 
+APP_NAME = "Amulet Map Editor"
+APP_TAGLINE = "World Migration & Conversion"
+APP_BRAND = f"{APP_NAME} - {APP_TAGLINE}"
+
 # Import leveldb before any wx imports to avoid a native crash when opening
 # Bedrock worlds on Windows in some environments.
 try:

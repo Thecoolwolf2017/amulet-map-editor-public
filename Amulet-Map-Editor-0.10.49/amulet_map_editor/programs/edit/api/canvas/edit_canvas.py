@@ -26,6 +26,7 @@ from amulet.api.level import BaseLevel
 
 from amulet_map_editor import CONFIG
 from amulet_map_editor import close_level
+from amulet_map_editor import APP_NAME
 from amulet_map_editor.api.wx.ui.traceback_dialog import TracebackDialog
 from amulet_map_editor.programs.edit.api.ui.goto import show_goto
 from amulet_map_editor.programs.edit.api.ui.tool_manager import ToolManagerSizer
@@ -231,7 +232,7 @@ class EditCanvas(BaseEditCanvas):
     def run_operation(
         self,
         operation: OperationType,
-        title="Amulet",
+        title=APP_NAME,
         msg="Running Operation",
         throw_exceptions=False,
     ) -> Any:

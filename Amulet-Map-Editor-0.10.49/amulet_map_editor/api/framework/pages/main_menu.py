@@ -7,6 +7,7 @@ import wx.adv
 import wx.lib.inspection
 
 from amulet_map_editor.api import image, lang
+from amulet_map_editor import APP_NAME, APP_TAGLINE
 from .base_page import BasePageUI
 from amulet_map_editor.api.wx.ui.select_world import open_level_from_dialog
 
@@ -36,11 +37,20 @@ class AmuletMainMenu(wx.Panel, BasePageUI):
         name_sizer.Add(icon, flag=wx.CENTER)
 
         self._amulet_name = wx.StaticText(self)
-        self._amulet_name.SetFont(wx.Font(40, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
+        self._amulet_name.SetFont(wx.Font(36, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
         name_sizer.Add(
             self._amulet_name, flag=wx.CENTER | wx.LEFT | wx.RIGHT, border=10
         )
         name_sizer.Add(icon2, flag=wx.CENTER)
+
+        self._amulet_tagline = wx.StaticText(self)
+        tagline_font = self._amulet_tagline.GetFont()
+        tagline_font.SetPointSize(13)
+        tagline_font.SetWeight(wx.FONTWEIGHT_BOLD)
+        self._amulet_tagline.SetFont(tagline_font)
+        self._amulet_tagline.SetForegroundColour(wx.Colour(85, 85, 85))
+        sizer.Add(self._amulet_tagline, 0, wx.CENTER | wx.BOTTOM, 10)
+
         button_font = wx.Font(20, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
         self._open_world_button = wx.Button(self, size=(400, 70))
         self._open_world_button.SetFont(button_font)
@@ -107,7 +117,8 @@ class AmuletMainMenu(wx.Panel, BasePageUI):
         self._load_strings()
 
     def _load_strings(self):
-        self._amulet_name.SetLabel(lang.get("meta.amulet"))
+        self._amulet_name.SetLabel(APP_NAME)
+        self._amulet_tagline.SetLabel(APP_TAGLINE)
         self._open_world_button.SetLabel(lang.get("main_menu.open_world"))
         self._user_manual_button.SetLabel(lang.get("main_menu.user_manual"))
         self._user_manual_button.SetToolTip(lang.get("app.browser_open_tooltip"))

@@ -1,11 +1,12 @@
 # Amulet Map Editor
+### World Migration & Conversion
 
 ![Build](../../workflows/Build/badge.svg)
 ![Unittests](../../workflows/Unittests/badge.svg?event=push)
 ![Stylecheck](../../workflows/Stylecheck/badge.svg?event=push)
 [![Documentation Status](https://readthedocs.org/projects/amulet-map-editor/badge)](https://amulet-map-editor.readthedocs.io)
 
-A new Minecraft world editor and converter that supports all versions since Java 1.12 and Bedrock 1.7.
+A Minecraft world editor, migration tool, and converter that supports all versions since Java 1.12 and Bedrock 1.7.
 
 ![cover](resource/img/cover.jpg)
 
@@ -45,6 +46,12 @@ Compatibility with wayland is done through xwayland for x11 support.
 ## Contributing
 
 For information about contributing to this project, please read the [contribution](contributing.md) file.
+
+## Branding Direction
+
+- Core product name: `Amulet Map Editor`
+- Subtitle/tagline: `World Migration & Conversion`
+- Rebrand policy: keep this name for continuity/search/history, and only consider full renaming if the product shifts away from editing as its primary value.
 
 ## Workspace Layout
 

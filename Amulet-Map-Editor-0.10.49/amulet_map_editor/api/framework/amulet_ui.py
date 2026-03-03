@@ -19,7 +19,7 @@ from amulet_map_editor.api.wx.ui.select_world import (
     WorldSelectAndRecentUI,
 )
 from amulet_map_editor.api.wx.ui.traceback_dialog import TracebackDialog
-from amulet_map_editor import __version__, lang
+from amulet_map_editor import __version__, lang, APP_BRAND
 from amulet_map_editor.api.framework.pages import WorldPageUI
 from .pages import AmuletMainMenu, BasePageUI
 
@@ -234,7 +234,7 @@ class AmuletUI(wx.Frame):
     _level_notebook: AmuletLevelNotebook
 
     def __init__(self, parent):
-        title = f"Amulet {__version__}"
+        title = f"{APP_BRAND} {__version__}"
         if not getattr(sys, "frozen", False):
             title += " (source)"
         wx.Frame.__init__(

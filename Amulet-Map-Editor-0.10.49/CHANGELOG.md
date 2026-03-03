@@ -31,6 +31,9 @@
   - Sponge Schematic,
   - Bedrock `.mcstructure`.
 - Export dialogs now show a remap confirmation summary when custom blocks are detected before writing files.
+- Soft rebrand copy pass for public release:
+  - product naming now consistently uses `Amulet Map Editor`,
+  - subtitle/tagline `World Migration & Conversion` is shown in key UI surfaces.
 - Custom fork behavior now suppresses upstream update popups by default.
 - Build pipeline supports fallback self-signed executable signing when signing secrets are unavailable.
 
