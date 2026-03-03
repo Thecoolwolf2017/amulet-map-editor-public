@@ -278,3 +278,7 @@ def remap_chunk_for_export(
     chunk_copy._block_palette = new_palette
     chunk_copy.changed = True
     return chunk_copy, replaced_blocks
+
+
+# Helper module only; keep plugin autoloader quiet by exposing an empty export list.
+export = []
