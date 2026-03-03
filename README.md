@@ -1,4 +1,5 @@
-# Amulet
+# Amulet Map Editor
+### World Migration & Conversion
 
 Private Windows binary distribution for Amulet Map Editor.
 

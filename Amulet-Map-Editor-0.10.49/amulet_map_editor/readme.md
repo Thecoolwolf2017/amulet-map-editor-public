@@ -1,6 +1,8 @@
-# Amulet Documentation
+# Amulet Map Editor Documentation
 
-When you open Amulet you should be greeted by a screen that looks similar to the image below.
+### World Migration & Conversion
+
+When you open Amulet Map Editor you should be greeted by a screen that looks similar to the image below.
 
 ![main menu](../resource/img/main_menu.jpg)
 
@@ -16,11 +18,11 @@ On the left should be some expandable panes containing the worlds stored in the 
 
 ![world select expand](../resource/img/world_select_expand.jpg)
 
-Click on a world to open it with Amulet.
+Click on a world to open it with Amulet Map Editor.
 
 If you wish to open a world from a different location press the "Open World Directory" button and select the world folder.
 
-On the right will be worlds that you have recently opened in Amulet (this will be blank if you have not opened any worlds yet).
+On the right will be worlds that you have recently opened in Amulet Map Editor (this will be blank if you have not opened any worlds yet).
 
 There are some cases where you will not see a world listed or are not able to open a listed world. If it is a Java world it may be because the world was opened with Forge. We do not currently support opening these worlds but we would like to support them in the future. If this is not the case I would suggest reaching out to us either through [discord](https://discord.gg/BTm6jnf) or twitter and we will try and help you.
 
@@ -28,11 +30,11 @@ Once you have opened a world you should see a screen that looks like the image b
 
 ![world select expand](../resource/img/about.jpg)
 
-On the top are the worlds that you currently have open in Amulet to make it easy to switch between. More worlds can be opened at the same time either by selecting the main menu and opening again or through File -> Open World
+On the top are the worlds that you currently have open in Amulet Map Editor to make it easy to switch between. More worlds can be opened at the same time either by selecting the main menu and opening again or through File -> Open World
 
 # Sub-Programs
 
-On the left are the different sub-programs contained within Amulet. The documentation for which can be found below.
+On the left are the different sub-programs contained within Amulet Map Editor. The documentation for which can be found below.
 
 [Convert Program Documentation](programs/convert/readme.md)
 

@@ -1,6 +1,6 @@
 # External Docs Update Drafts
 
-This file contains ready-to-paste updates for external docs that currently reference outdated installation steps.
+This file contains ready-to-paste updates for external docs that currently reference outdated Amulet Map Editor installation steps.
 
 ## amuletmc.com "Install From Source"
 Replace the current source install steps with:
@@ -17,7 +17,7 @@ Replace the current source install steps with:
 7. Optional: build a wheel:
    `python -m build`
 
-## ReadTheDocs "Getting Started / Installing Amulet"
+## ReadTheDocs "Getting Started / Installing Amulet Map Editor"
 Replace the "install from source" reference with the same steps above, and mention:
 
 - Windows compiled builds are available as a zip; extract and run `amulet_app.exe`.

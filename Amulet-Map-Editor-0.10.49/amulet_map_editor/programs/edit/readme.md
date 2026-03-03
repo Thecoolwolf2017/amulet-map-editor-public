@@ -68,7 +68,7 @@ When this tool is active you can left click in the renderer to select boxes.
 If you press and hold the left mouse button you can drag a selection box between two places.
 You can also quick press the left mouse button to start and stop so you do not have to hold the left mouse button.
 
-Amulet is not limited to just one selection box. If you hold `Ctrl` and `Left mouse button` you will be able to add another selection box to the existing selection.
+Amulet Map Editor is not limited to just one selection box. If you hold `Ctrl` and `Left mouse button` you will be able to add another selection box to the existing selection.
 This will allow you to create more complex selections.
 
 Once the selection is created you can resize the selection by clicking on it.
@@ -90,7 +90,7 @@ You can also move the active selection box directly with the keyboard using `Lef
 
 - Select an area and press the copy button in the select tool or (`Ctrl` + `C`) or (`Edit` -> `Copy`)
 - Press the paste button in the select tool or (`Ctrl` + `V`) or (`Edit` -> `Paste`) to choose where to paste the selection in the world. See [paste](#paste) for more information.
-- It is worth noting here that Amulet is able to have multiple worlds open at the same time and the copied area can be pasted into a different world.
+- It is worth noting here that Amulet Map Editor is able to have multiple worlds open at the same time and the copied area can be pasted into a different world.
 - Our translation system also handles conversion between different world formats so the source and destination worlds do not need to be from the same version or platform.
 
 ### Paste
@@ -112,7 +112,7 @@ The operations tool is a place where users can write their own code for use with
 
 The tool consists of a drop down list of the operations and each operation can define what the rest of the UI looks like.
 
-There are a number of operations that are distributed with Amulet.
+There are a number of operations that are distributed with Amulet Map Editor.
 As of writing they are:
 - Fill: Fill the selected box(es) with the chosen block
 - Replace: Replace the chosen block in the selected box(es) with another chosen block
@@ -137,7 +137,7 @@ These tools will allow you to import and export a number of different structure 
 Currently the supported formats are `.construction`, `.schematic`, `.schem` and `.mcstructure`
 
 Note that if you just want to copy between worlds you do not need to export to a file.
-You can just copy from one world and without closing Amulet open the second world and paste it in. 
+You can just copy from one world and without closing Amulet Map Editor open the second world and paste it in. 
 
 ### Chunk
 
